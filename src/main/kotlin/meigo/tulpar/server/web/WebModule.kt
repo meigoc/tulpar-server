@@ -73,6 +73,7 @@ fun Application.tulparModule(ctx: ServerContext) {
 
         packageRoutes(ctx)
         downloadRoutes(ctx)
+        publishRoutes(ctx)
     }
 }
 
