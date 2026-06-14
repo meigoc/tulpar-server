@@ -28,24 +28,32 @@ class DownloadLimiter(
     /** Try to start a download for [ip]; false if the per-IP cap is reached. */
     fun tryAcquire(ip: String): Boolean {
         if (exempt(ip)) { totalDownloads.incrementAndGet(); return true }
-        val counter = active.computeIfAbsent(ip) { AtomicInteger(0) }
-        synchronized(counter) {
+        var acquired = false
+        // compute() holds the bin lock, so the cap check + increment is atomic
+        // with respect to release() (which also uses compute) — the per-IP limit
+        // can never be transiently exceeded.
+        active.compute(ip) { _, existing ->
+            val counter = existing ?: AtomicInteger(0)
             if (counter.get() >= limits.maxDownloadsPerIP) {
-                rejected.incrementAndGet()
-                return false
+                counter // unchanged; acquired stays false
+            } else {
+                counter.incrementAndGet()
+                acquired = true
+                counter
             }
-            counter.incrementAndGet()
         }
-        totalDownloads.incrementAndGet()
-        return true
+        if (acquired) totalDownloads.incrementAndGet() else rejected.incrementAndGet()
+        return acquired
     }
 
     /** Release a previously acquired download slot. */
     fun release(ip: String) {
         if (exempt(ip)) return
-        val counter = active[ip] ?: return
-        synchronized(counter) {
-            if (counter.decrementAndGet() <= 0) active.remove(ip)
+        // compute() holds the bin lock so decrement-to-zero and removal are atomic
+        // w.r.t. a concurrent computeIfAbsent in tryAcquire (no lost counter).
+        active.compute(ip) { _, counter ->
+            if (counter == null) null
+            else if (counter.decrementAndGet() <= 0) null else counter
         }
     }
 

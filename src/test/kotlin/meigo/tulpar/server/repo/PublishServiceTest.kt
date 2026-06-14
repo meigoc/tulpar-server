@@ -101,6 +101,35 @@ class PublishServiceTest {
     }
 
     @Test
+    fun `rejects package whose metadata name escapes the pool`() {
+        val svc = service()
+        // Craft a package whose metadata.json name contains path traversal.
+        val payload = "x".toByteArray()
+        val bytes = meigo.tulpar.server.apg.ApgTestFixtures.tarXz(
+            linkedMapOf(
+                "metadata.json" to """{"name":"../../../../tmp/evil","version":"1.0","type":"binary","description":"d","maintainer":"m","homepage":"h"}""".toByteArray(),
+                "data/usr/bin/x" to payload,
+                "md5sums" to "usr/bin/x ${meigo.tulpar.server.apg.ChecksumAlgo.MD5.hex(payload)}\n".toByteArray(),
+                "crc32sums" to "usr/bin/x ${meigo.tulpar.server.apg.ChecksumAlgo.CRC32.hex(payload)}\n".toByteArray(),
+            ),
+        )
+        val result = svc.publish(bytes, null)
+        val rejected = assertIs<PublishResult.Rejected>(result)
+        assertTrue(rejected.reason.contains("unsafe") || rejected.reason.contains("escapes"), "reason: ${rejected.reason}")
+        // nothing was written outside (or inside) the pool
+        assertFalse(File("/tmp/evil").exists())
+        assertFalse(File(root, "pool").walkTopDown().any { it.name.endsWith(".apg") })
+    }
+
+    @Test
+    fun `rejects channel with path traversal`() {
+        val svc = service()
+        val bytes = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        val result = svc.publish(bytes, null, channel = "../escape")
+        assertIs<PublishResult.Rejected>(result)
+    }
+
+    @Test
     fun `publishes to a custom channel`() {
         val svc = service()
         val bytes = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")

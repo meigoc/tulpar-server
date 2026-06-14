@@ -4,6 +4,7 @@ import meigo.tulpar.server.apg.ApgArchive
 import meigo.tulpar.server.apg.ApgValidationResult
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.config.PublishConfig
+import meigo.tulpar.server.security.PathSafety
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Files
@@ -74,7 +75,17 @@ class PublishService(
         }
 
         val coords = PackageCoordinates.of(meta, ch)
-        val target = repository.root.resolve(coords.relativePath)
+
+        // Security: the path is derived from attacker-controlled metadata
+        // (name/version/architecture) and the channel. Reject any segment that
+        // isn't a safe path component, and verify the resolved target stays
+        // strictly inside pool/ — otherwise a crafted "name":"../../etc/x" could
+        // write outside the repository.
+        if (!PathSafety.allSafe(ch, coords.name, coords.version, coords.arch)) {
+            return PublishResult.Rejected("package metadata contains unsafe path segments (name/version/architecture/channel)")
+        }
+        val target = PathSafety.resolveContained(repository.root, coords.relativePath)
+            ?: return PublishResult.Rejected("resolved package path escapes the repository root")
 
         synchronized(writeLock) {
             if (target.isFile && !config.allowOverwrite) {
@@ -107,10 +118,15 @@ class PublishService(
 
     private fun atomicWrite(target: File, bytes: ByteArray) {
         val tmp = File.createTempFile(target.name, ".part", target.parentFile)
-        tmp.writeBytes(bytes)
-        Files.move(
-            tmp.toPath(), target.toPath(),
-            StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
-        )
+        try {
+            tmp.writeBytes(bytes)
+            Files.move(
+                tmp.toPath(), target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+            )
+        } finally {
+            // If the move succeeded tmp is already gone; clean up on any failure.
+            if (tmp.exists()) tmp.delete()
+        }
     }
 }
