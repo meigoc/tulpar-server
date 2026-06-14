@@ -11,6 +11,7 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.json.Json
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.Version
+import meigo.tulpar.server.security.installRateLimiting
 import java.io.File
 
 /**
@@ -76,9 +77,10 @@ fun Application.tulparModule(ctx: ServerContext) {
 }
 
 /**
- * Seam for installing security plugins. Replaced/extended in M4; default is a
- * no-op so the module is usable on its own (and in M3 tests).
+ * Install security plugins: per-IP rate limiting / ban guard as an early
+ * intercept. Download concurrency + throughput limiting is applied per-request
+ * inside the download routes via [ServerContext.downloadLimiter].
  */
 internal fun Application.securityHook(ctx: ServerContext) {
-    // no-op until M4
+    installRateLimiting(ctx)
 }
