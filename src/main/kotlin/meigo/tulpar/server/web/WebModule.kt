@@ -24,6 +24,13 @@ import java.io.File
  * [meigo.tulpar.server.security.installSecurity] which M4 wires in here.
  */
 fun Application.tulparModule(ctx: ServerContext) {
+    if (ctx.config.server.httpsRedirect) {
+        install(io.ktor.server.plugins.httpsredirect.HttpsRedirect) {
+            sslPort = ctx.config.server.tls.port
+            permanentRedirect = true
+        }
+    }
+
     install(ContentNegotiation) {
         json(Json {
             prettyPrint = false

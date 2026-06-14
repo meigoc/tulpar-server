@@ -62,8 +62,17 @@ class StartCommand : CliktCommand(name = "start") {
                 logger.info("startup index: {} package(s) in {}", n, ctx.repository.root)
             }
 
-            logger.info("starting server on {}:{}", finalHost, finalPort)
-            val server = embeddedServer(Netty, port = finalPort, host = finalHost) {
+            val connectors = TlsSupport.connectors(finalHost, finalPort, config.server.tls)
+            if (config.server.tls.enabled) {
+                logger.info("starting server on http://{}:{} and https://{}:{}", finalHost, finalPort, finalHost, config.server.tls.port)
+            } else {
+                logger.info("starting server on http://{}:{}", finalHost, finalPort)
+            }
+            val server = embeddedServer(
+                Netty,
+                environment = applicationEnvironment { },
+                configure = { this.connectors.addAll(connectors) },
+            ) {
                 tulparModule(ctx)
             }
             server.start(wait = false)
