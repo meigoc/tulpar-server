@@ -5,6 +5,7 @@ import meigo.tulpar.server.repo.Repository
 import meigo.tulpar.server.security.DownloadLimiter
 import meigo.tulpar.server.security.IpGuard
 import meigo.tulpar.server.security.TokenAuth
+import meigo.tulpar.server.util.RequestLog
 
 /** Server-wide version constant. */
 object Version {
@@ -22,4 +23,5 @@ class ServerContext(
     val ipGuard: IpGuard = IpGuard(config.limits),
     val downloadLimiter: DownloadLimiter = DownloadLimiter(config.limits),
     val tokenAuth: TokenAuth = TokenAuth(config.publish),
+    val requestLog: RequestLog = RequestLog(),
 )

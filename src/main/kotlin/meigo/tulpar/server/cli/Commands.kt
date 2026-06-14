@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import com.github.ajalt.clikt.parameters.types.int
+import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.mordant.rendering.TextColors
 import com.github.ajalt.mordant.rendering.TextStyles
 import com.github.ajalt.mordant.terminal.Terminal
@@ -14,8 +15,10 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.Version
+import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.config.ConfigFactory
 import meigo.tulpar.server.config.TulparConfig
+import meigo.tulpar.server.metrics.MetricsCollector
 import meigo.tulpar.server.repo.Repository
 import meigo.tulpar.server.web.tulparModule
 import org.slf4j.LoggerFactory
@@ -63,7 +66,18 @@ class StartCommand : CliktCommand(name = "start") {
             val server = embeddedServer(Netty, port = finalPort, host = finalHost) {
                 tulparModule(ctx)
             }
-            server.start(wait = !daemon || !config.server.runInBackground)
+            server.start(wait = false)
+
+            val metrics = MetricsCollector(ctx) { ctx.requestLog.totalCount() }
+            metrics.start()
+
+            if (daemon || config.server.runInBackground) {
+                logger.info("server running in background (detached); no interactive console")
+                // Keep the JVM alive without an interactive console.
+                Thread.currentThread().join()
+            } else {
+                AdminConsole(ctx, server, metrics).run()
+            }
         } catch (e: Exception) {
             terminal.println(TextColors.red("Fatal Error: ${e.message}"))
             logger.error("failed to start server", e)
@@ -75,6 +89,27 @@ class StartCommand : CliktCommand(name = "start") {
         terminal.println(TextStyles.bold(Version.SERVER_NAME))
         terminal.println(TextColors.gray("OS: ${System.getProperty("os.name")} | Arch: ${System.getProperty("os.arch")}"))
         terminal.println(TextColors.gray("=".repeat(terminal.size.width.coerceAtMost(60))))
+    }
+}
+
+class CheckCommand : CliktCommand(name = "check") {
+    override fun help(context: Context) = "Validate an .apg package against the APG spec"
+
+    private val file by argument(name = "file", help = "Path to the .apg file")
+        .file(mustExist = true, canBeDir = false)
+
+    override fun run() {
+        val result = ApgValidator().validate(file)
+        terminal.println(TextStyles.bold("Checking ${file.name}"))
+        result.metadata?.let { terminal.println(TextColors.gray("  ${it.name} ${it.version} (${it.archToken}), APG v${result.detectedVersion}")) }
+        result.warnings.forEach { terminal.println(TextColors.yellow("  warning: $it")) }
+        result.errors.forEach { terminal.println(TextColors.red("  error: $it")) }
+        if (result.ok) {
+            terminal.println(TextColors.green("OK — valid package"))
+        } else {
+            terminal.println(TextColors.red("INVALID — ${result.errors.size} error(s)"))
+            throw com.github.ajalt.clikt.core.ProgramResult(1)
+        }
     }
 }
 

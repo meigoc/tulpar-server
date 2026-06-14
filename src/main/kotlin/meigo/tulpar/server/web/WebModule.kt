@@ -11,7 +11,9 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.json.Json
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.Version
+import meigo.tulpar.server.metrics.MetricsCollector
 import meigo.tulpar.server.security.installRateLimiting
+import meigo.tulpar.server.security.installRequestLog
 import java.io.File
 
 /**
@@ -69,6 +71,11 @@ fun Application.tulparModule(ctx: ServerContext) {
             call.respond(VersionResponse(Version.SERVER_NAME, Version.VALUE, meigo.tulpar.server.repo.RepoData.FORMAT))
         }
 
+        get("/metrics") {
+            val snap = MetricsCollector(ctx) { ctx.requestLog.totalCount() }.snapshot()
+            call.respond(snap)
+        }
+
         staticFiles("/static", File("static"))
 
         packageRoutes(ctx)
@@ -84,4 +91,5 @@ fun Application.tulparModule(ctx: ServerContext) {
  */
 internal fun Application.securityHook(ctx: ServerContext) {
     installRateLimiting(ctx)
+    installRequestLog(ctx)
 }

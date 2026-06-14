@@ -6,6 +6,7 @@ import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import meigo.tulpar.server.ServerContext
+import meigo.tulpar.server.util.RequestRecord
 
 /**
  * Resolve the client IP for an [ApplicationCall].
@@ -41,5 +42,25 @@ fun Application.installRateLimiting(ctx: ServerContext) {
             )
             finish()
         }
+    }
+}
+
+/**
+ * Record every request to the bounded in-memory [ServerContext.requestLog] once
+ * the response status is known (drives the `log` admin command and metrics).
+ */
+fun Application.installRequestLog(ctx: ServerContext) {
+    val behindProxy = ctx.config.server.behindProxy
+    sendPipeline.intercept(io.ktor.server.response.ApplicationSendPipeline.After) {
+        val status = call.response.status()?.value ?: 0
+        ctx.requestLog.record(
+            RequestRecord(
+                epochMillis = System.currentTimeMillis(),
+                ip = call.clientIp(behindProxy),
+                method = call.request.httpMethod.value,
+                uri = call.request.uri,
+                status = status,
+            ),
+        )
     }
 }
