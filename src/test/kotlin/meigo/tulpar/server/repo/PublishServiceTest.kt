@@ -234,7 +234,14 @@ class PublishServiceTest {
         )
         val result = svc.publish(bytes, null)
         val rejected = assertIs<PublishResult.Rejected>(result)
-        assertTrue(rejected.reason.contains("unsafe") || rejected.reason.contains("escapes"), "reason: ${rejected.reason}")
+        // Rejected by the identifier allowlist (first line of defense) or by
+        // segment/containment checks — the exact wording is not the contract.
+        assertTrue(
+            rejected.reason.contains("identifiers") ||
+                rejected.reason.contains("unsafe") ||
+                rejected.reason.contains("escapes"),
+            "reason: ${rejected.reason}",
+        )
         // nothing was written outside (or inside) the pool
         assertFalse(File("/tmp/evil").exists())
         assertFalse(File(root, "pool").walkTopDown().any { it.name.endsWith(".apg") })
@@ -255,5 +262,50 @@ class PublishServiceTest {
         val success = assertIs<PublishResult.Success>(svc.publish(bytes, null, channel = "extra"))
         assertEquals("extra", success.coordinates.channel)
         assertTrue(File(root, "pool/extra/curl/x86_64/curl-7.85.0-x86_64.apg").isFile)
+    }
+
+    @Test
+    fun `rejects a name with a control character (identifier allowlist)`() {
+        val svc = service()
+        val payload = "x".toByteArray()
+        val bytes = ApgTestFixtures.tarXz(
+            linkedMapOf(
+                "metadata.json" to """{"name":"bad\u0000name","version":"1.0","architecture":"x86_64","type":"binary"}""".toByteArray(),
+                "data/usr/bin/x" to payload,
+            ),
+        )
+        val rejected = assertIs<PublishResult.Rejected>(svc.publish(bytes, null))
+        assertTrue(rejected.reason.contains("identifiers"), rejected.reason)
+    }
+
+    @Test
+    fun `rejects a windows-reserved package name`() {
+        val svc = service()
+        val bytes = ApgTestFixtures.tarXz(
+            linkedMapOf(
+                "metadata.json" to """{"name":"CON","version":"1.0","architecture":"x86_64"}""".toByteArray(),
+                "data/usr/bin/x" to "x".toByteArray(),
+            ),
+        )
+        val rejected = assertIs<PublishResult.Rejected>(svc.publish(bytes, null))
+        assertTrue(rejected.reason.contains("identifiers"), rejected.reason)
+    }
+
+    @Test
+    fun `rejects a case-insensitive collision with an existing package`() {
+        val svc = service(allowOverwrite = false)
+        // Publish "curl" first, then "CURL" — same file on a case-insensitive FS.
+        assertIs<PublishResult.Success>(svc.publish(ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64"), null))
+        val collision = svc.publish(ApgTestFixtures.validV2Package("CURL", "7.85.0", "x86_64"), null)
+        val rejected = assertIs<PublishResult.Rejected>(collision)
+        assertTrue(rejected.reason.contains("case-insensitive"), rejected.reason)
+    }
+
+    @Test
+    fun `accepts an epoch version identifier`() {
+        val svc = service()
+        val bytes = ApgTestFixtures.validV2Package("pkg", "1:2.3", "x86_64")
+        val success = assertIs<PublishResult.Success>(svc.publish(bytes, null))
+        assertTrue(File(root, success.coordinates.relativePath).isFile)
     }
 }

@@ -4,6 +4,7 @@ import meigo.tulpar.server.apg.ApgSignature
 import meigo.tulpar.server.apg.ApgValidationResult
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.config.PublishConfig
+import meigo.tulpar.server.security.Identifiers
 import meigo.tulpar.server.security.PathSafety
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -93,10 +94,18 @@ class PublishService(
         val coords = PackageCoordinates.of(meta, ch)
 
         // Security: the path is derived from attacker-controlled metadata
-        // (name/version/architecture) and the channel. Reject any segment that
-        // isn't a safe path component, and verify the resolved target stays
-        // strictly inside pool/ — otherwise a crafted "name":"../../etc/x" could
-        // write outside the repository.
+        // (name/version/architecture) and the channel. Enforce the strict
+        // identifier allowlists (Identifiers), reject any segment that isn't a
+        // safe path component, and verify the resolved target stays strictly
+        // inside pool/ — otherwise a crafted "name":"../../etc/x" could write
+        // outside the repository.
+        if (!Identifiers.isSafeChannel(ch) || !Identifiers.isSafeName(coords.name) ||
+            !Identifiers.isSafeVersion(coords.version) || !Identifiers.isSafeArch(coords.arch)
+        ) {
+            return PublishResult.Rejected(
+                "package identifiers outside the allowed character set (channel/name/version/architecture)",
+            )
+        }
         if (!PathSafety.allSafe(ch, coords.name, coords.version, coords.arch)) {
             return PublishResult.Rejected("package metadata contains unsafe path segments (name/version/architecture/channel)")
         }
@@ -106,6 +115,21 @@ class PublishService(
         synchronized(writeLock) {
             if (target.isFile && !config.allowOverwrite) {
                 return PublishResult.Rejected("package already exists: ${coords.relativePath}")
+            }
+            // Case-insensitive filesystems (Windows, default macOS) would let
+            // "Pkg" overwrite "pkg" via a distinct-looking path; detect the
+            // collision through the existing index instead.
+            if (!config.allowOverwrite) {
+                val canonicalTarget = Identifiers.canonical(coords.relativePath)
+                val collides = repository.entries().any {
+                    Identifiers.canonical(it.coordinates.relativePath) == canonicalTarget &&
+                        it.coordinates.relativePath != coords.relativePath
+                }
+                if (collides) {
+                    return PublishResult.Rejected(
+                        "package collides with an existing one on case-insensitive filesystems: ${coords.relativePath}",
+                    )
+                }
             }
             target.parentFile.mkdirs()
             atomicWrite(target, apgBytes)
