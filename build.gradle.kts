@@ -25,6 +25,24 @@ repositories {
 }
 
 dependencies {
+    // Ktor 3.3.3 transitively pulls Netty 4.2.7, which OSV lists with known
+    // advisories (HTTP request smuggling GHSA-38f8-5428-x5cv, IPv6 subnet
+    // filter bypass GHSA-3qp7-7mw8-wx86, CORS cache poisoning
+    // GHSA-8c42-7qj2-3j46, CRLF injection GHSA-gcjf-9mgh-3p7g, and others).
+    // Pin the whole Netty family to 4.2.17.Final, the first release with zero
+    // open OSV advisories at this writing.
+    constraints {
+        implementation("io.netty:netty-codec-http:4.2.17.Final")
+        implementation("io.netty:netty-handler:4.2.17.Final")
+        implementation("io.netty:netty-common:4.2.17.Final")
+        implementation("io.netty:netty-buffer:4.2.17.Final")
+        implementation("io.netty:netty-transport:4.2.17.Final")
+        implementation("io.netty:netty-codec:4.2.17.Final")
+        implementation("io.netty:netty-codec-base:4.2.17.Final")
+        implementation("io.netty:netty-codec-compression:4.2.17.Final")
+        implementation("io.netty:netty-resolver:4.2.17.Final")
+    }
+
     // Ktor (server)
     implementation("io.ktor:ktor-server-netty:$ktorVersion")
     implementation("io.ktor:ktor-server-core:$ktorVersion")
