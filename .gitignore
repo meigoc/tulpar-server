@@ -39,3 +39,6 @@ Thumbs.db
 /packages/
 /pool/
 *.pid
+
+# CI scratch (libAPG build cache workspace)
+.agent-cache/

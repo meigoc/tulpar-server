@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "release/**" ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  LIBAPG_COMMIT: 1ecebf7c7fb567740126bed483779f536b57c36a
+  LIBSODIUM_VERSION: "1.0.20"
+
+jobs:
+  build-test:
+    name: build + test (JDK ${{ matrix.jdk }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        jdk: [ 21, 25 ]
+        include:
+          - os: windows-latest
+            jdk: 21
+          - os: macos-latest
+            jdk: 21
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.jdk }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-jdk${{ matrix.jdk }}-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-jdk${{ matrix.jdk }}-
+
+      - name: Build and test
+        run: ./gradlew build test --no-daemon --console=plain --stacktrace
+
+      - name: Fat jar
+        if: matrix.os == 'ubuntu-latest' && matrix.jdk == 21
+        run: ./gradlew shadowJar --no-daemon --console=plain
+
+      - name: Upload fat jar
+        if: matrix.os == 'ubuntu-latest' && matrix.jdk == 21
+        uses: actions/upload-artifact@v4
+        with:
+          name: tulpar-server-all
+          path: build/libs/*-all.jar
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-jdk${{ matrix.jdk }}
+          path: build/test-results/test/*.xml
+
+  conformance:
+    name: differential conformance vs libAPG @ pinned commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-conformance-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: gradle-conformance-
+
+      - name: Cache libAPG build
+        id: cache-libapg
+        uses: actions/cache@v4
+        with:
+          path: |
+            .agent-cache/usr
+            .agent-cache/libapg-src
+            .agent-cache/apg_oracle
+            .agent-cache/apg_sigtool
+          key: libapg-${{ env.LIBAPG_COMMIT }}-sodium-${{ env.LIBSODIUM_VERSION }}
+
+      - name: Install meson/ninja
+        run: python3 -m pip install --user meson ninja
+
+      - name: Build libsodium + libAPG + oracle
+        if: steps.cache-libapg.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .agent-cache/build
+          cd .agent-cache/build
+          curl -fsSL -o libsodium.tar.gz \
+            "https://download.libsodium.org/libsodium/releases/libsodium-${LIBSODIUM_VERSION}-stable.tar.gz"
+          tar xzf libsodium.tar.gz
+          cd libsodium-stable
+          ./configure --prefix="$GITHUB_WORKSPACE/.agent-cache/usr" >/dev/null
+          make -j"$(nproc)" >/dev/null
+          make install >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          git clone https://github.com/NurOS-Linux/libAPG.git .agent-cache/libapg-src
+          cd .agent-cache/libapg-src
+          git checkout "$LIBAPG_COMMIT"
+          export PATH="$HOME/.local/bin:$PATH"
+          export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/.agent-cache/usr/lib/pkgconfig"
+          export CFLAGS="-I$GITHUB_WORKSPACE/.agent-cache/usr/include"
+          export LDFLAGS="-L$GITHUB_WORKSPACE/.agent-cache/usr/lib"
+          meson setup build --buildtype=release
+          meson compile -C build
+          meson test -C build --print-errorlogs
+          cd "$GITHUB_WORKSPACE/conformance/oracle"
+          for tool in apg_oracle apg_sigtool; do
+            gcc -O2 -Wall -Wextra -std=gnu11 \
+              -I"$GITHUB_WORKSPACE/.agent-cache/libapg-src/include" \
+              -I"$GITHUB_WORKSPACE/.agent-cache/usr/include" \
+              "$tool.c" -o "$GITHUB_WORKSPACE/.agent-cache/$tool" \
+              -L"$GITHUB_WORKSPACE/.agent-cache/libapg-src/build" -lapg \
+              -L"$GITHUB_WORKSPACE/.agent-cache/usr/lib" -lsodium \
+              -Wl,-rpath,"$GITHUB_WORKSPACE/.agent-cache/libapg-src/build" \
+              -Wl,-rpath,"$GITHUB_WORKSPACE/.agent-cache/usr/lib"
+          done
+
+      - name: Restore built tools (cache hit)
+        if: steps.cache-libapg.outputs.cache-hit == 'true'
+        run: ls -la .agent-cache/
+
+      - name: Run live conformance
+        run: |
+          ./gradlew conformanceTest \
+            -PapgOracle="$GITHUB_WORKSPACE/.agent-cache/apg_oracle" \
+            --no-daemon --console=plain
