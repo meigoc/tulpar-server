@@ -1,0 +1,581 @@
+[
+  {
+    "case": "01-normal.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "02-dotdot-name.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "03-dotdot-mid.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "04-absolute-name.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "05-dot-prefix.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "06-symlink-rel.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "07-symlink-abs.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "08-symlink-dotdot.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "09-hardlink-existing.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "10-hardlink-dotdot.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "11-hardlink-abs.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "12-hardlink-missing.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "13-hardlink-dotdotmid.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "14-chrdev.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "15-blkdev.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "16-fifo.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "17-meta-json-only.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "18-empty-meta.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": null,
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": null
+    }
+  },
+  {
+    "case": "19-no-data-dir.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "20-bom-meta.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "21-comments-meta.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "22-trailing-comma.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "23-numeric-version.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": null
+    }
+  },
+  {
+    "case": "24-dup-keys.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "first",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "25-nonstr-in-arrays.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [
+        "ok"
+      ],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [
+        "a",
+        "b"
+      ],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "26-empty-strings.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": "",
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": "",
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "27-long-name.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "28-raw-tar.tar",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "29-gz.tar.gz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "30-zstd.tar.zst",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "31-bz2.tar.bz2",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "32-unknown-field.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "33-lone-surrogate.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "34-unescaped-ctl.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "35-nan-number.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "36-symlink-ok-target.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "37-component-254.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "38-component-255.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "39-component-256.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "40-hardlink-after-target.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  },
+  {
+    "case": "41-hardlink-before-target.tar.xz",
+    "oracle": {
+      "accepted": false
+    }
+  },
+  {
+    "case": "42-symlink-dangling.tar.xz",
+    "oracle": {
+      "accepted": true,
+      "architecture": null,
+      "conf": [],
+      "conflicts": [],
+      "dependencies": [],
+      "description": null,
+      "homepage": null,
+      "license": null,
+      "maintainer": null,
+      "name": "adv",
+      "provides": [],
+      "replaces": [],
+      "tags": [],
+      "type": null,
+      "version": "1.0"
+    }
+  }
+]

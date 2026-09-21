@@ -1,0 +1,202 @@
+[
+{
+"input": "libfoo",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo",
+"version": null
+}
+},
+{
+"input": "libfoo >= 2.0",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "libfoo>=2.0",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "libfoo >=2.0",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "libfoo>= 2.0",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": " x <= 1.0 ",
+"oracle": {
+"name": "x",
+"canonical": "x <= 1.0",
+"version": "1.0"
+}
+},
+{
+"input": "a==1",
+"oracle": {
+"name": "a",
+"canonical": "a == 1",
+"version": "1"
+}
+},
+{
+"input": "a!=1",
+"oracle": {
+"name": "a",
+"canonical": "a != 1",
+"version": "1"
+}
+},
+{
+"input": "a<1",
+"oracle": {
+"name": "a",
+"canonical": "a < 1",
+"version": "1"
+}
+},
+{
+"input": "a>1",
+"oracle": {
+"name": "a",
+"canonical": "a > 1",
+"version": "1"
+}
+},
+{
+"input": "a<=1",
+"oracle": {
+"name": "a",
+"canonical": "a <= 1",
+"version": "1"
+}
+},
+{
+"input": "a>=1",
+"oracle": {
+"name": "a",
+"canonical": "a >= 1",
+"version": "1"
+}
+},
+{
+"input": "weird<1.0>2.0",
+"oracle": {
+"name": "weird<1.0",
+"canonical": "weird<1.0 > 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "a>=>=1",
+"oracle": {
+"name": "a",
+"canonical": "a >= >=1",
+"version": ">=1"
+}
+},
+{
+"input": "==1",
+"oracle": {
+"name": "",
+"canonical": " == 1",
+"version": "1"
+}
+},
+{
+"input": "a==",
+"oracle": {
+"name": "a",
+"canonical": "a == ",
+"version": ""
+}
+},
+{
+"input": "a = = 1",
+"oracle": {
+"name": "a = = 1",
+"canonical": "a = = 1",
+"version": null
+}
+},
+{
+"input": "name\t>=\t2.0",
+"oracle": {
+"name": "name",
+"canonical": "name >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "a>=1<2",
+"oracle": {
+"name": "a",
+"canonical": "a >= 1<2",
+"version": "1<2"
+}
+},
+{
+"input": "<>=!",
+"oracle": {
+"name": "<",
+"canonical": "< >= !",
+"version": "!"
+}
+},
+{
+"input": "a!>1",
+"oracle": {
+"name": "a!",
+"canonical": "a! > 1",
+"version": "1"
+}
+},
+{
+"input": "",
+"oracle": {
+"name": "",
+"canonical": "",
+"version": null
+}
+},
+{
+"input": " ",
+"oracle": {
+"name": "",
+"canonical": "",
+"version": null
+}
+},
+{
+"input": "pkg-1.0 >= 2.0",
+"oracle": {
+"name": "pkg-1.0",
+"canonical": "pkg-1.0 >= 2.0",
+"version": "2.0"
+}
+},
+{
+"input": "libfoo  >=  2.0  ",
+"oracle": {
+"name": "libfoo",
+"canonical": "libfoo >= 2.0",
+"version": "2.0"
+}
+}
+]
