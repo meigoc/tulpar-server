@@ -44,6 +44,22 @@ class Repository(val root: File) {
     /** Current entries (immutable snapshot). */
     fun entries(): List<PackageEntry> = snapshot.get().entries
 
+    /**
+     * True once the repository has completed its startup initialization: the
+     * first reindex, or an explicit [markReady] for configurations that start
+     * with an empty index (reindexOnStart=false). Health reports "starting"
+     * (503) until then.
+     */
+    @Volatile
+    private var readyFlag = false
+
+    fun isReady(): Boolean = readyFlag
+
+    /** Mark the repository ready without rescanning (empty-index startup). */
+    fun markReady() {
+        readyFlag = true
+    }
+
     fun byName(name: String): List<PackageEntry> = snapshot.get().byName[name] ?: emptyList()
 
     fun find(channel: String, name: String, version: String, arch: String): PackageEntry? =
@@ -91,6 +107,7 @@ class Repository(val root: File) {
                 .thenComparing { e -> e.version },
         )
         snapshot.set(Snapshot(ordered, Instant.now()))
+        readyFlag = true
         log.info("indexed {} package(s) from {}", ordered.size, pool)
         return ordered.size
     }
@@ -128,10 +145,22 @@ class Repository(val root: File) {
         )
     }
 
-    /** Build the canonical repodata document from the current snapshot. */
+    /**
+     * Build the canonical repodata document from the current snapshot.
+     *
+     * The document is byte-for-byte reproducible for the same pool state:
+     * `generated_at` is derived from the newest package mtime (not wall
+     * clock), and entries carry a deterministic order. The Tulpar client only
+     * reads `packages[]`, so `meta` stays informational.
+     */
     fun buildRepoData(serverName: String): RepoData {
         val snap = snapshot.get()
-        val generatedIso = ISO.format(snap.generatedAt)
+        val generated = if (snap.entries.isEmpty()) {
+            Instant.EPOCH
+        } else {
+            Instant.ofEpochMilli(snap.entries.maxOf { it.updatedEpochMillis })
+        }
+        val generatedIso = ISO.format(generated)
         val packages = snap.entries.map { entry ->
             RepoPackage.from(entry, ISO.format(Instant.ofEpochMilli(entry.updatedEpochMillis)))
         }

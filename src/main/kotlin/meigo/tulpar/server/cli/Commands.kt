@@ -76,6 +76,10 @@ class StartCommand : CliktCommand(name = "start") {
             if (config.repo.reindexOnStart) {
                 val n = ctx.repository.reindex()
                 logger.info("startup index: {} package(s) in {}", n, ctx.repository.root)
+            } else {
+                // No startup scan: the index is intentionally empty and the
+                // server is serving from that state.
+                ctx.repository.markReady()
             }
 
             val connectors = TlsSupport.connectors(finalHost, finalPort, config.server.tls)

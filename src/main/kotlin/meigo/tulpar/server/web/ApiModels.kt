@@ -9,10 +9,21 @@ import meigo.tulpar.server.repo.PackageEntry
 data class ErrorResponse(val error: String, val detail: String? = null)
 
 @Serializable
-data class HealthResponse(val status: String, val packages: Int, val channels: List<String>)
+data class HealthResponse(
+    val status: String,
+    val ready: Boolean,
+    val packages: Int,
+    val channels: List<String>,
+)
 
 @Serializable
-data class VersionResponse(val server: String, val version: String, val format: String)
+data class VersionResponse(
+    val server: String,
+    val version: String,
+    val api: String,
+    val format: String,
+    val libapgTarget: String,
+)
 
 /** Summary of a package build in list responses. */
 @Serializable

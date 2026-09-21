@@ -29,11 +29,12 @@ class WebModuleTest {
     }
 
     @Test
-    fun `health reports package count`() = testRepo {
+    fun `health reports package count and readiness`() = testRepo {
         val resp = client.get("/api/v2/health")
         assertEquals(HttpStatusCode.OK, resp.status)
         val body = resp.bodyAsText()
         assertContains(body, "\"status\":\"ok\"")
+        assertContains(body, "\"ready\":true")
         assertContains(body, "\"packages\":2")
     }
 
@@ -41,7 +42,9 @@ class WebModuleTest {
     fun `version endpoint`() = testRepo {
         val body = client.get("/api/v2/version").bodyAsText()
         assertContains(body, "2.0.0")
+        assertContains(body, "\"api\":\"v2\"")
         assertContains(body, "tulpar-repodata/2")
+        assertContains(body, meigo.tulpar.server.Version.LIBAPG_TARGET)
     }
 
     @Test
@@ -125,5 +128,31 @@ class WebModuleTest {
         // encoded ".." should not escape; resolves to 404, never a file outside pool
         val resp = client.get("/api/v2/download/main/..%2f..%2f..%2fetc/passwd/x86_64")
         assertTrue(resp.status == HttpStatusCode.NotFound || resp.status == HttpStatusCode.BadRequest)
+    }
+}
+
+class HealthReadinessTest {
+
+    @Test
+    fun `health reports starting until the first index completes`() = testApplication {
+        val root = WebTestSupport.tempRepo()
+        try {
+            val config = meigo.tulpar.server.config.TulparConfig()
+                .copy(repo = meigo.tulpar.server.config.TulparConfig().repo.copy(root = root.path))
+            val repo = meigo.tulpar.server.repo.Repository(root)
+            // No reindex: the server is still initializing.
+            application { tulparModule(meigo.tulpar.server.ServerContext(config, repo)) }
+            val resp = client.get("/api/v2/health")
+            assertEquals(HttpStatusCode.ServiceUnavailable, resp.status)
+            assertContains(resp.bodyAsText(), "\"ready\":false")
+            assertContains(resp.bodyAsText(), "\"status\":\"starting\"")
+
+            repo.reindex()
+            val ok = client.get("/api/v2/health")
+            assertEquals(HttpStatusCode.OK, ok.status)
+            assertContains(ok.bodyAsText(), "\"ready\":true")
+        } finally {
+            root.deleteRecursively()
+        }
     }
 }

@@ -162,3 +162,51 @@ class RepositoryTest {
         assertTrue(repo.entries().isEmpty())
     }
 }
+
+class RepodataReproducibilityTest {
+
+    private val tmp: File = Files.createTempDirectory("tulpar-repro-test").toFile()
+
+    @AfterTest
+    fun cleanup() {
+        tmp.deleteRecursively()
+    }
+
+    private fun place(name: String, version: String, arch: String?) {
+        val bytes = ApgTestFixtures.validV2Package(name, version, arch)
+        val archToken = arch ?: "noarch"
+        val dir = File(tmp, "pool/main/$name/$archToken")
+        dir.mkdirs()
+        val apg = File(dir, "$name-$version-$archToken.apg")
+        apg.writeBytes(bytes)
+        apg.setLastModified(1_700_000_000_000L) // fixed mtime for determinism
+    }
+
+    @Test
+    fun `repodata is byte-for-byte identical across reindexes of the same pool`() {
+        place("curl", "7.85.0", "x86_64")
+        place("curl", "7.86.0", "x86_64")
+        place("tree", "2.2.1", "x86_64")
+
+        val repo = Repository(tmp)
+        repo.reindex()
+        val first = repo.buildRepoData("Tulpar Server test").toJson()
+
+        // Wall-clock time passes; a fresh reindex of the same pool state must
+        // produce identical bytes.
+        Thread.sleep(20)
+        repo.reindex()
+        val second = repo.buildRepoData("Tulpar Server test").toJson()
+
+        assertEquals(first, second)
+        // and generated_at is derived from package mtimes, not from now()
+        assertTrue(first.contains("2023-11-14"), first.substring(0, minOf(300, first.length)))
+    }
+
+    @Test
+    fun `empty pool yields a deterministic empty document`() {
+        val repo = Repository(tmp)
+        repo.reindex()
+        assertEquals(repo.buildRepoData("s").toJson(), repo.buildRepoData("s").toJson())
+    }
+}

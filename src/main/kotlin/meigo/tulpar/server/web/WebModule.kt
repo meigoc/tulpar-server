@@ -76,12 +76,23 @@ fun Application.tulparModule(ctx: ServerContext) {
         }
 
         get("/api/v2/health") {
+            val ready = ctx.repository.isReady()
             val channels = ctx.repository.channels()
-            call.respond(HealthResponse("ok", ctx.repository.entries().size, channels))
+            val status = if (ready) "ok" else "starting"
+            val code = if (ready) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable
+            call.respond(code, HealthResponse(status, ready, ctx.repository.entries().size, channels))
         }
 
         get("/api/v2/version") {
-            call.respond(VersionResponse(Version.SERVER_NAME, Version.VALUE, meigo.tulpar.server.repo.RepoData.FORMAT))
+            call.respond(
+                VersionResponse(
+                    server = Version.SERVER_NAME,
+                    version = Version.VALUE,
+                    api = "v2",
+                    format = meigo.tulpar.server.repo.RepoData.FORMAT,
+                    libapgTarget = Version.LIBAPG_TARGET,
+                ),
+            )
         }
 
         get("/metrics") {
