@@ -311,6 +311,9 @@ WantedBy=multi-user.target
   memory. Packages violating libAPG's safety rules (traversal, device nodes,
   unsafe hardlinks) are rejected.
 - Request log: last 1000 requests in memory.
+- Single instance per repository: publish/yank serialize on an in-process
+  lock and the index is in-memory. Do not run two server processes against
+  the same `repo.root` — scale reads with a reverse proxy/cache instead.
 
 ## Security
 
