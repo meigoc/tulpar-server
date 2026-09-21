@@ -23,8 +23,9 @@ build/
 !src/test/resources/conformance/corpus/*.tar
 !src/test/resources/conformance/corpus/*.tar.gz
 
-# Locally built C oracle binary (source is committed, binary is not)
+# Locally built C oracle/signer binaries (sources are committed, binaries are not)
 /conformance/oracle/apg_oracle
+/conformance/oracle/apg_sigtool
 /conformance/oracle/*.o
 
 .DS_Store
