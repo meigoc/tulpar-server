@@ -205,15 +205,22 @@ the string wins** (strstr), name/version trimmed of space/tab only.
 
 1. Size/count/decoder-memory caps (§2) — DoS bounds libAPG does not need as a
    local tool but a public server does.
-2. name/version required for indexing (§3) — the pool layout
+2. name/version required for indexing (§3) — the pool path
    `pool/<channel>/<name>/<arch>/<name>-<version>-<arch>.apg` cannot exist
    without them.
-3. Checksum integrity policy (§4) — opt-in via `publish.validate`; production
+3. Identifier character allowlists (channel/name/version/arch) — libAPG puts
+   no character restrictions on metadata identifiers, but they become
+   filesystem and URL segments here; production identifiers (95 pool
+   packages) all pass.
+4. Checksum integrity policy (§4) — opt-in via `publish.validate`; production
    currently runs `validate=false`, where behavior equals libAPG's (ignore).
-4. Present-but-invalid signature rejected at publish (§6) — a server storing a
+5. Present-but-invalid signature rejected at publish (§6) — a server storing a
    package whose attached signature does not verify would be laundering
    tampered artifacts.
-5. JSON nesting depth cap (§3) — stack-safety for a network-facing parser.
+6. JSON nesting depth cap (§3) — stack-safety for a network-facing parser.
+7. Upload size caps (`publish.maxUploadBytes`, default 4 GiB; multipart part
+   cap aligned) — resource bound; packages above it cannot be published
+   through the API but remain libAPG-installable locally.
 
 Each deviation is pinned by a test named in the tables above and none changes
 the accept-set for packages libAPG accepts.
