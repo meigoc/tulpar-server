@@ -38,6 +38,7 @@ class VersionCommand : CliktCommand(name = "version") {
     override fun help(context: Context) = "Show version info"
     override fun run() {
         terminal.println("${Version.SERVER_NAME} (repodata ${meigo.tulpar.server.repo.RepoData.FORMAT})")
+        terminal.println(TextColors.gray("libAPG compatibility target: ${Version.LIBAPG_TARGET}"))
     }
 }
 
