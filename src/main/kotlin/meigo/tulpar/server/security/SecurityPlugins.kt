@@ -18,22 +18,30 @@ data class ClientAddress(val ip: String, val fromProxyHeader: Boolean)
  * the only trustworthy source and a client could otherwise spoof its address
  * to dodge bans.
  *
- * With `behindProxy`, the RIGHTMOST X-Forwarded-For entry is used: a correct
- * proxy appends the TCP peer it saw, so the rightmost value is the one the
- * trusted proxy itself vouches for, while everything left of it is
- * client-claimed and spoofable.
+ * With `behindProxy`, the RIGHTMOST entry of the full X-Forwarded-For chain is
+ * used. Some proxies append a separate XFF header line rather than merging
+ * into one comma-list, so ALL XFF lines are joined first; a correct proxy
+ * appends the TCP peer it saw as the last value, which is the one the trusted
+ * proxy vouches for. Everything left of it is client-claimed and spoofable.
  *
- * Loopback exemption is only honored for TCP-derived addresses; a proxied
- * deployment where the proxy runs on localhost must not let every request
- * claim loopback and bypass rate limiting.
+ * When `behindProxy` is set but no XFF header is present (a misconfigured
+ * proxy), the TCP peer is used and marked proxy-derived, so the loopback
+ * exemption does NOT apply — a localhost proxy cannot make all traffic
+ * limit-exempt.
+ *
+ * Loopback exemption is only honored for TCP-derived addresses.
  */
 fun ApplicationCall.clientAddress(behindProxy: Boolean): ClientAddress {
     if (behindProxy) {
-        request.headers["X-Forwarded-For"]?.split(",")
+        val xff = request.headers.getAll("X-Forwarded-For")
+            ?.joinToString(",")
+            ?.split(",")
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.lastOrNull()
-            ?.let { return ClientAddress(it, fromProxyHeader = true) }
+        // A proxied request with no usable XFF still counts as proxy-supplied
+        // so the loopback exemption cannot be claimed for proxied traffic.
+        return ClientAddress(xff ?: request.local.remoteHost, fromProxyHeader = true)
     }
     return ClientAddress(request.local.remoteHost, fromProxyHeader = false)
 }

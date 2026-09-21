@@ -153,3 +153,30 @@ class ConfigUnknownKeysTest {
         assertEquals(emptyList(), ConfigFactory.unknownKeys(java.io.File("/nonexistent-tulpar.conf")))
     }
 }
+
+class ConfigValidationEdgeTest {
+
+    @Test
+    fun `blank token entries are rejected`() {
+        val result = ConfigValidation.validate(
+            TulparConfig(publish = PublishConfig(enabled = true, tokens = listOf("x".repeat(32), ""))),
+        )
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.contains("blank") }, result.errors.toString())
+    }
+
+    @Test
+    fun `maxSignatureBytes upper bound prevents Int overflow`() {
+        val result = ConfigValidation.validate(
+            TulparConfig(
+                publish = PublishConfig(
+                    enabled = true,
+                    tokens = listOf("x".repeat(32)),
+                    maxSignatureBytes = 3L * 1024 * 1024 * 1024,
+                ),
+            ),
+        )
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.contains("maxSignatureBytes") }, result.errors.toString())
+    }
+}

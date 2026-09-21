@@ -177,11 +177,29 @@ class PublishService(
             if (sigBytes != null) atomicWrite(sigFile, sigBytes) else if (config.allowOverwrite) sigFile.delete()
 
             repository.reindex()
+            writeRepoDataSafe()
         }
 
         val size = target.length()
         log.info("published {} ({} bytes, signed={})", coords.relativePath, size, sigBytes != null)
         return PublishResult.Success(coords, validation.warnings, sigBytes != null)
+    }
+
+    /**
+     * Reindex under the publish write lock (used by the admin console so a
+     * console-triggered reindex cannot interleave with a publish and snapshot
+     * the pool mid-move). Also refreshes the on-disk repodata.json.
+     */
+    fun reindexUnderLock(): Int = synchronized(writeLock) {
+        val n = repository.reindex()
+        writeRepoDataSafe()
+        n
+    }
+
+    /** Refresh on-disk repodata.json; failures are logged, never fatal. */
+    private fun writeRepoDataSafe() {
+        runCatching { repository.writeRepoData(meigo.tulpar.server.Version.SERVER_NAME) }
+            .onFailure { log.warn("failed to write repodata.json: {}", it.message) }
     }
 
     /** Staging directory for uploads: inside the repo root so moves are same-filesystem. */
@@ -200,6 +218,7 @@ class PublishService(
             apg.delete()
             if (sig.isFile) sig.delete()
             repository.reindex()
+            writeRepoDataSafe()
             return DeleteResult.Deleted
         }
     }

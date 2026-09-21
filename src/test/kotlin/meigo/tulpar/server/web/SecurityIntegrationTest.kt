@@ -178,3 +178,81 @@ class DownloadsAndProxyTest {
         )
     }
 }
+
+class ProxyEdgeCasesTest {
+
+    private val root: File = WebTestSupport.tempRepo()
+
+    @AfterTest
+    fun cleanup() = root.deleteRecursively().let {}
+
+    @Test
+    fun `missing XFF behind proxy does not grant loopback exemption`() = testApplication {
+        // A proxy that fails to append XFF must not turn every request into
+        // an exempt loopback client.
+        val limits = LimitsConfig(maxRequestsPerWindow = 2, exemptLoopback = true)
+        val config = TulparConfig(server = ServerConfig(behindProxy = true), limits = limits)
+            .copy(repo = TulparConfig().repo.copy(root = root.path))
+        application { tulparModule(ServerContext(config, Repository(root).apply { reindex() })) }
+        repeat(2) { assertEquals(HttpStatusCode.OK, client.get("/api/v2/health").status) }
+        assertEquals(HttpStatusCode.TooManyRequests, client.get("/api/v2/health").status)
+    }
+
+    @Test
+    fun `multiple XFF header lines are all considered`() = testApplication {
+        // A proxy appending a separate header line instead of merging must
+        // still yield the rightmost (proxy-vouched) address.
+        val limits = LimitsConfig(maxRequestsPerWindow = 2, exemptLoopback = false)
+        val config = TulparConfig(server = ServerConfig(behindProxy = true), limits = limits)
+            .copy(repo = TulparConfig().repo.copy(root = root.path))
+        application { tulparModule(ServerContext(config, Repository(root).apply { reindex() })) }
+        repeat(2) {
+            assertEquals(
+                HttpStatusCode.OK,
+                client.get("/api/v2/health") {
+                    header("X-Forwarded-For", "spoofed.by.client")
+                    header("X-Forwarded-For", "7.7.7.7")
+                }.status,
+            )
+        }
+        // Third request: the rightmost line's address (7.7.7.7) is banned.
+        assertEquals(
+            HttpStatusCode.TooManyRequests,
+            client.get("/api/v2/health") {
+                header("X-Forwarded-For", "other.spoof")
+                header("X-Forwarded-For", "7.7.7.7")
+            }.status,
+        )
+    }
+}
+
+class IndexIdentifierGuardTest {
+
+    @Test
+    fun `pool contents with hostile identifiers are excluded at index time`() {
+        val root = WebTestSupport.tempRepo()
+        try {
+            // Simulate out-of-band placement: a valid package whose metadata
+            // name contains a space (not URL/FS-safe per the allowlist).
+            val dir = File(root, "pool/main/hostile name/x86_64")
+            dir.mkdirs()
+            File(dir, "pkg-1-x86_64.apg").writeBytes(
+                meigo.tulpar.server.apg.ApgTestFixtures.tarZstd(
+                    linkedMapOf(
+                        "metadata.json" to """{"name":"hostile name","version":"1","architecture":"x86_64"}""".toByteArray(),
+                        "data/usr/bin/x" to "y".toByteArray(),
+                    ),
+                ),
+            )
+            // A well-formed package for contrast.
+            WebTestSupport.place(root, "good", "1.0", "x86_64")
+
+            val repo = meigo.tulpar.server.repo.Repository(root)
+            repo.reindex()
+            val names = repo.entries().map { it.name }
+            assertEquals(listOf("good"), names)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+}

@@ -224,7 +224,10 @@ limits {
     windowMillis = 60000
     banDurationMillis = 60000
     maxDownloadsPerIP = 4
-    maxDownloadSpeed = 0   # bytes/sec, 0 = unlimited
+    maxDownloadSpeed = 0   # bytes/sec per stream, 0 = unlimited; advisory:
+                           # applies to full-body GETs only (Range/resume
+                           # requests are served unthrottled), per concurrent
+                           # download stream of an IP
     bufferSize = 65536
     exemptLoopback = true  # never applies to X-Forwarded-For addresses
 }

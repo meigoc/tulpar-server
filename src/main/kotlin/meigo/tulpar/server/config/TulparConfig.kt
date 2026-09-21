@@ -160,6 +160,9 @@ object ConfigValidation {
     /** Minimum accepted publish token length. */
     const val MIN_TOKEN_LENGTH = 32
 
+    /** Upper bound for publish.maxSignatureBytes (a valid .sig is 64 bytes). */
+    const val MAX_SIGNATURE_BYTES_LIMIT = 1L * 1024 * 1024
+
     /** Keystore passwords that ship with tooling defaults and must be flagged. */
     private val DEFAULT_KEYSTORE_PASSWORDS = setOf("changeit", "changeme", "")
 
@@ -207,7 +210,9 @@ object ConfigValidation {
                     errors.add("publish.enabled=true but no tokens are configured — publishing would be wide open; set publish.tokens (env substitution like \${TULPAR_PUBLISH_TOKEN} is supported)")
                 }
                 for ((i, token) in tokens.withIndex()) {
-                    if (token.isNotBlank() && token.length < MIN_TOKEN_LENGTH) {
+                    if (token.isBlank()) {
+                        errors.add("publish.tokens[$i] is blank")
+                    } else if (token.length < MIN_TOKEN_LENGTH) {
                         errors.add("publish.tokens[$i] is shorter than $MIN_TOKEN_LENGTH characters")
                     }
                 }
@@ -217,6 +222,9 @@ object ConfigValidation {
             }
             if (maxUploadBytes < 1) errors.add("publish.maxUploadBytes must be >= 1")
             if (maxSignatureBytes < 64) errors.add("publish.maxSignatureBytes must be >= 64")
+            if (maxSignatureBytes > MAX_SIGNATURE_BYTES_LIMIT) {
+                errors.add("publish.maxSignatureBytes must be <= $MAX_SIGNATURE_BYTES_LIMIT")
+            }
         }
 
         with(config.metrics) {

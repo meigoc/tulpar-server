@@ -30,7 +30,9 @@ class AdminConsole(
             e.forEach { println("  ${it.channel}/${it.name} ${it.version} (${it.arch})${if (it.signed) " [signed]" else ""}") }
         }
         register("reindex", "rescan the pool directory") {
-            val n = ctx.repository.reindex()
+            // Under the publish write lock so a console reindex cannot
+            // interleave with an in-flight publish.
+            val n = ctx.publishService.reindexUnderLock()
             println("reindexed: $n package(s)")
         }
         register("metrics", "print a metrics snapshot") { println(metrics.snapshot().format()) }

@@ -326,3 +326,86 @@ class PublishStatusCodesTest {
         assertContains(banned.bodyAsText(), "\"error\":\"rate_limited\"")
     }
 }
+
+class PublishMultipartAbuseTest {
+
+    private val root: File = WebTestSupport.tempRepo()
+    private val token = "secret-token"
+
+    @AfterTest
+    fun cleanup() = root.deleteRecursively().let {}
+
+    private fun ctx(): ServerContext {
+        val publish = PublishConfig(enabled = true, tokens = listOf(token), validate = true, allowOverwrite = true)
+        val config = TulparConfig(publish = publish).copy(repo = TulparConfig().repo.copy(root = root.path))
+        return ServerContext(config, Repository(root).apply { reindex() })
+    }
+
+    @Test
+    fun `oversized non-file form field is rejected without buffering it all`() = testApplication {
+        application { tulparModule(ctx()) }
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        val huge = "z".repeat(200_000) // > the 64 KiB form-field cap
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            formData {
+                append("apg", pkg, Headers.build {
+                    append(HttpHeaders.ContentDisposition, "filename=\"pkg.apg\"")
+                })
+                append("channel", huge)
+            },
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.PayloadTooLarge, resp.status)
+        // nothing was indexed or staged
+        assertEquals(0, Repository(root).apply { reindex() }.entries().size)
+        val staging = File(root, ".tmp")
+        assertTrue(
+            !staging.isDirectory || (staging.listFiles()?.isEmpty() ?: true),
+            "staging dir must be empty after rejection",
+        )
+    }
+
+    @Test
+    fun `declared Content-Length beyond caps is rejected up front with 413`() = testApplication {
+        application { tulparModule(ctx()) }
+        // Ktor's test client recomputes Content-Length from the body, so the
+        // declared-length precheck is exercised with a raw request whose CL
+        // header is set by hand on a channel body (CL is trusted, body small).
+        val resp = client.post("/api/v2/packages") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            header(HttpHeaders.ContentType, "multipart/form-data; boundary=xyz")
+            header(HttpHeaders.ContentLength, (9L * 1024 * 1024 * 1024).toString())
+            setBody(io.ktor.utils.io.ByteReadChannel("--xyz--\r\n"))
+        }
+        assertEquals(HttpStatusCode.PayloadTooLarge, resp.status)
+    }
+
+    @Test
+    fun `two package parts in one upload is a 400`() = testApplication {
+        application { tulparModule(ctx()) }
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            formData {
+                append("apg", pkg, Headers.build {
+                    append(HttpHeaders.ContentDisposition, "filename=\"a.apg\"")
+                })
+                append("package", pkg, Headers.build {
+                    append(HttpHeaders.ContentDisposition, "filename=\"b.apg\"")
+                })
+            },
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `non-multipart body is a 400`() = testApplication {
+        application { tulparModule(ctx()) }
+        val resp = client.post("/api/v2/packages") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            header(HttpHeaders.ContentType, "application/octet-stream")
+            setBody(ByteArray(100))
+        }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+}

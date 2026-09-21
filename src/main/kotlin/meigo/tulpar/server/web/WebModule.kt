@@ -46,11 +46,10 @@ fun Application.tulparModule(ctx: ServerContext) {
     install(io.ktor.server.plugins.conditionalheaders.ConditionalHeaders)
 
     install(StatusPages) {
-        // Ktor's multipart parser enforces receiveMultipart(formFieldLimit) in
-        // a background job and cancels the handler on breach, so the
-        // limit-exceeded IOException surfaces here rather than in the route's
-        // own try/catch. Map it to the same 413 the route emits for its own
-        // streaming guard.
+        // Ktor's multipart parser enforced formFieldLimit in a background job;
+        // with the in-repo StreamingMultipart the caps raise MultipartLimit-
+        // Exception directly. The IOException mapping is kept for any residual
+        // engine-level limit paths and mapped to the same 413.
         exception<java.io.IOException> { call, cause ->
             if (cause.message?.contains("exceeds limit") == true) {
                 call.respond(
@@ -58,16 +57,20 @@ fun Application.tulparModule(ctx: ServerContext) {
                     ErrorResponse("payload_too_large", "upload exceeds the configured size limit"),
                 )
             } else {
+                call.application.log.error("unhandled I/O failure", cause)
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse("internal_error", cause.message),
+                    ErrorResponse("internal_error", null),
                 )
             }
         }
         exception<Throwable> { call, cause ->
+            // Log the full cause server-side; never echo exception messages to
+            // clients (JVM messages routinely contain absolute server paths).
+            call.application.log.error("unhandled exception", cause)
             call.respond(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse("internal_error", cause.message),
+                ErrorResponse("internal_error", null),
             )
         }
         status(HttpStatusCode.NotFound) { call, status ->

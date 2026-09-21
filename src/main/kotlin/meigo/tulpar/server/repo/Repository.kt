@@ -4,6 +4,7 @@ import meigo.tulpar.server.apg.ApgArchive
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.apg.ApgVersion
 import meigo.tulpar.server.apg.ChecksumAlgo
+import meigo.tulpar.server.security.Identifiers
 import meigo.tulpar.server.security.sanitizeForLog
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -121,18 +122,31 @@ class Repository(val root: File) {
     private fun scanFile(apg: File, channel: String): PackageEntry? {
         val archive = ApgArchive.read(apg)
         val meta = archive.metadata() ?: run {
-            log.warn("excluding {}: no parseable metadata.json with name/version strings", apg.path)
+            log.warn("excluding {}: no parseable metadata.json with name/version strings", sanitizeForLog(apg.path))
             return null
         }
         val compat = indexValidator.validate(archive)
         if (!compat.libapgCompatible) {
             log.warn(
                 "excluding {}: libAPG would not accept this package ({})",
-                apg.path, sanitizeForLog(compat.rejectionReasons.joinToString("; ")),
+                sanitizeForLog(apg.path), sanitizeForLog(compat.rejectionReasons.joinToString("; ")),
             )
             return null
         }
         val coords = PackageCoordinates.of(meta, channel)
+        // Identifiers become URL and filesystem segments: pool contents placed
+        // out-of-band with hostile names/versions/arches are flagged and
+        // excluded (publish enforces the same allowlist at upload time).
+        if (!Identifiers.isSafeChannel(channel) || !Identifiers.isSafeName(coords.name) ||
+            !Identifiers.isSafeVersion(coords.version) || !Identifiers.isSafeArch(coords.arch)
+        ) {
+            log.warn(
+                "excluding {}: identifiers outside the allowed character set ({}/{}/{})",
+                sanitizeForLog(apg.path),
+                sanitizeForLog(coords.name), sanitizeForLog(coords.version), sanitizeForLog(coords.arch),
+            )
+            return null
+        }
         val sha256 = ChecksumAlgo.SHA256.hexFile(apg)
         val sig = File(apg.parentFile, apg.name + ".sig").isFile
         return PackageEntry(
