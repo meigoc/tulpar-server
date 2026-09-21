@@ -16,8 +16,9 @@ val mordantVersion = "3.0.2"
 val hopliteVersion = "2.8.0"
 val logbackVersion = "1.5.23"
 val serializationVersion = "1.7.3"
-val commonsCompressVersion = "1.27.1"
+val commonsCompressVersion = "1.28.0"
 val xzVersion = "1.10"
+val zstdJniVersion = "1.5.7-18"
 
 repositories {
     mavenCentral()
@@ -50,9 +51,12 @@ dependencies {
     // JSON (kotlinx.serialization) — repodata.json + tolerant metadata parsing
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
 
-    // Archive: read .apg (tar.xz) natively — replaces the old Jython apgunpacker
+    // Archive: read .apg natively. libAPG accepts tar under {none, gzip, xz,
+    // zstd} (src/archive.c); zstd-jni backs the zstd filter, matching the
+    // version bundled by the production 2.0-PREVIEW-1 deployment.
     implementation("org.apache.commons:commons-compress:$commonsCompressVersion")
     implementation("org.tukaani:xz:$xzVersion")
+    implementation("com.github.luben:zstd-jni:$zstdJniVersion")
 
     // Logging
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
@@ -81,4 +85,48 @@ tasks.named<ShadowJar>("shadowJar") {
 
 tasks.build {
     dependsOn("shadowJar")
+}
+
+// --- Differential conformance against libAPG (see conformance/README.md) ---
+//
+// The hermetic replay of the recorded oracle goldens runs as part of `test`
+// (GoldenCorpusTest). The tasks below re-verify the goldens against a LIVE
+// libAPG oracle binary; they are skipped unless -PapgOracle=<path> is given,
+// so `./gradlew test` never needs libAPG installed. CI passes the oracle built
+// from the pinned libAPG commit.
+
+val apgOracle: String? = providers.gradleProperty("apgOracle").orNull
+
+tasks.register<Exec>("conformanceTest") {
+    group = "verification"
+    description = "Re-verify recorded conformance goldens against a live libAPG oracle (-PapgOracle=<path>)"
+    onlyIf {
+        if (apgOracle != null && file(apgOracle).canExecute()) true
+        else {
+            logger.warn(
+                "conformanceTest SKIPPED: no executable libAPG oracle. " +
+                    "Build conformance/oracle/apg_oracle.c against the pinned libAPG commit " +
+                    "and pass -PapgOracle=/path/to/apg_oracle (mandatory in CI).",
+            )
+            false
+        }
+    }
+    workingDir = projectDir
+    commandLine(
+        "python3", "conformance/live-oracle-diff.py",
+        apgOracle ?: "/bin/false",
+        "src/test/resources/conformance",
+    )
+}
+
+tasks.register<Exec>("regenerateConformanceGoldens") {
+    group = "verification"
+    description = "Regenerate all conformance goldens from a live oracle; review the diff before committing"
+    onlyIf { apgOracle != null && file(apgOracle).canExecute() }
+    workingDir = projectDir
+    commandLine(
+        "bash", "-c",
+        "python3 conformance/matrix-generator.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance && " +
+            "python3 conformance/regenerate-parse-goldens.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance",
+    )
 }
