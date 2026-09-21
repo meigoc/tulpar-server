@@ -22,6 +22,9 @@ sealed interface PublishResult {
     data class Rejected(val reason: String, val errors: List<String> = emptyList()) : PublishResult
 }
 
+/** Rejection that must map to HTTP 413 (payload too large) instead of 422. */
+class UploadTooLargeException(message: String) : Exception(message)
+
 /** Outcome of a delete (yank) attempt. */
 sealed interface DeleteResult {
     data object Deleted : DeleteResult
@@ -49,22 +52,41 @@ class PublishService(
     private val validator = ApgValidator(verifyChecksums = true)
 
     /**
-     * Store an uploaded package.
-     *
-     * @param apgBytes   the raw `.apg` payload (stored byte-for-byte)
-     * @param sigBytes   optional detached signature payload
-     * @param channel    target channel, defaults to the repo default
+     * Store an uploaded package from in-memory bytes. Small payloads only;
+     * the HTTP route streams uploads through [publishStaged] instead.
      */
     fun publish(apgBytes: ByteArray, sigBytes: ByteArray?, channel: String? = null): PublishResult {
-        val ch = channel?.takeIf { it.isNotBlank() } ?: defaultChannel
-
         if (apgBytes.size > config.maxUploadBytes) {
             return PublishResult.Rejected("upload exceeds ${config.maxUploadBytes} bytes")
         }
+        val staged = createTempFile("tulpar-upload-", ".apg", stagingDir())
+        return try {
+            staged.writeBytes(apgBytes)
+            publishStaged(staged, sigBytes, channel)
+        } catch (e: java.io.IOException) {
+            PublishResult.Rejected("failed to stage upload: ${e.message}")
+        } finally {
+            staged.delete()
+        }
+    }
 
-        // Validate from the bytes (no disk write yet). The validator reads the
-        // archive once, streaming, with the limits applied to uploads.
-        val validation: ApgValidationResult = validator.validateBytes(apgBytes)
+    /**
+     * Store a package whose bytes are already staged in a temp file [apgFile]
+     * (same filesystem as the pool). The file is validated by streaming —
+     * payload bytes never live on the heap — then atomically moved into place.
+     * [apgFile] is consumed: deleted on every failure path and moved on
+     * success; the caller must not touch it afterwards.
+     */
+    fun publishStaged(apgFile: File, sigBytes: ByteArray?, channel: String? = null): PublishResult {
+        val ch = channel?.takeIf { it.isNotBlank() } ?: defaultChannel
+
+        if (apgFile.length() > config.maxUploadBytes) {
+            apgFile.delete()
+            return PublishResult.Rejected("upload exceeds ${config.maxUploadBytes} bytes")
+        }
+
+        // Validate by streaming the staged file (no disk write, bounded heap).
+        val validation: ApgValidationResult = validator.validate(apgFile)
         if (!validation.libapgCompatible) {
             return PublishResult.Rejected("package is not acceptable to libAPG", validation.rejectionReasons)
         }
@@ -83,7 +105,7 @@ class PublishService(
             if (sigBytes.size > config.maxSignatureBytes) {
                 return PublishResult.Rejected("signature exceeds ${config.maxSignatureBytes} bytes")
             }
-            val verdict = verifySignature(apgBytes, sigBytes)
+            val verdict = verifySignatureFile(apgFile, sigBytes)
             if (verdict != ApgSignature.VerifyResult.VERIFIED) {
                 return PublishResult.Rejected("detached signature failed verification ($verdict)")
             }
@@ -132,15 +154,32 @@ class PublishService(
                 }
             }
             target.parentFile.mkdirs()
-            atomicWrite(target, apgBytes)
+            // Atomic move from the staging temp file (same filesystem by
+            // construction): readers never observe a partial package.
+            try {
+                Files.move(
+                    apgFile.toPath(), target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+                Files.move(apgFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
             val sigFile = File(target.parentFile, target.name + ".sig")
             if (sigBytes != null) atomicWrite(sigFile, sigBytes) else if (config.allowOverwrite) sigFile.delete()
 
             repository.reindex()
         }
 
-        log.info("published {} ({} bytes, signed={})", coords.relativePath, apgBytes.size, sigBytes != null)
+        val size = target.length()
+        log.info("published {} ({} bytes, signed={})", coords.relativePath, size, sigBytes != null)
         return PublishResult.Success(coords, validation.warnings, sigBytes != null)
+    }
+
+    /** Staging directory for uploads: inside the repo root so moves are same-filesystem. */
+    fun stagingDir(): File {
+        val dir = File(repository.root, ".tmp")
+        dir.mkdirs()
+        return dir
     }
 
     /** Remove a package build (and its signature) and reindex. */
@@ -157,19 +196,19 @@ class PublishService(
     }
 
     /**
-     * Verify a detached signature over package bytes against the configured
-     * libAPG-compatible keyring. Mirrors libAPG trans_commit: the keyring is
-     * loaded per verification (keyring.c keyring_load), and an unusable keyring
-     * fails closed.
+     * Verify a detached signature over a staged package file against the
+     * configured libAPG-compatible keyring. Mirrors libAPG trans_commit: the
+     * keyring is loaded per verification (keyring.c keyring_load), and an
+     * unusable keyring fails closed.
      */
-    private fun verifySignature(apgBytes: ByteArray, sigBytes: ByteArray): ApgSignature.VerifyResult {
+    private fun verifySignatureFile(apgFile: File, sigBytes: ByteArray): ApgSignature.VerifyResult {
         if (config.keyringDir.isBlank()) {
             log.warn("signature presented but publish.keyringDir is not configured; rejecting")
             return ApgSignature.VerifyResult.EMPTY_KEYRING
         }
         val keyring = ApgSignature.loadKeyring(File(config.keyringDir))
         if (keyring.isEmpty()) return ApgSignature.VerifyResult.EMPTY_KEYRING
-        return ApgSignature.verifyBytes(apgBytes, sigBytes, keyring)
+        return ApgSignature.verifyFile(apgFile, sigBytes, keyring)
     }
 
     private fun atomicWrite(target: File, bytes: ByteArray) {

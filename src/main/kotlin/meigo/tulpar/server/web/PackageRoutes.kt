@@ -62,10 +62,12 @@ private fun matchesQuery(e: PackageEntry, q: String): Boolean {
 }
 
 private suspend fun ApplicationCall.respondRepoData(ctx: ServerContext) {
-    respondText(
-        ctx.repository.buildRepoData(meigo.tulpar.server.Version.SERVER_NAME).toJson(pretty = false),
-        contentType = ContentType.Application.Json,
-    )
+    val json = ctx.repository.buildRepoData(meigo.tulpar.server.Version.SERVER_NAME).toJson(pretty = false)
+    // Stable between reindexes (generatedAt is fixed at snapshot time), so a
+    // content-hash ETag lets ConditionalHeaders answer If-None-Match with 304.
+    val etag = "\"" + meigo.tulpar.server.apg.ChecksumAlgo.SHA256.hex(json.toByteArray()).substring(0, 32) + "\""
+    response.headers.append(HttpHeaders.ETag, etag)
+    respondText(json, contentType = ContentType.Application.Json)
 }
 
 internal suspend fun ApplicationCall.badRequest(msg: String) =

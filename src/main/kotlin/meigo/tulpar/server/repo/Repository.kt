@@ -4,8 +4,11 @@ import meigo.tulpar.server.apg.ApgArchive
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.apg.ApgVersion
 import meigo.tulpar.server.apg.ChecksumAlgo
+import meigo.tulpar.server.security.sanitizeForLog
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicReference
@@ -71,7 +74,7 @@ class Repository(val root: File) {
                     .forEach { apg ->
                         runCatching { scanFile(apg, channel) }
                             .onSuccess { it?.let(found::add) }
-                            .onFailure { log.warn("skipping malformed package {}: {}", apg, it.message) }
+                            .onFailure { log.warn("skipping malformed package {}: {}", apg, sanitizeForLog(it.message.orEmpty())) }
                     }
             }
         }
@@ -108,7 +111,7 @@ class Repository(val root: File) {
         if (!compat.libapgCompatible) {
             log.warn(
                 "excluding {}: libAPG would not accept this package ({})",
-                apg.path, compat.rejectionReasons.joinToString("; "),
+                apg.path, sanitizeForLog(compat.rejectionReasons.joinToString("; ")),
             )
             return null
         }
@@ -144,11 +147,22 @@ class Repository(val root: File) {
         )
     }
 
-    /** Generate repodata.json and write it to the repository root. */
+    /** Generate repodata.json and write it to the repository root atomically. */
     fun writeRepoData(serverName: String): File {
         val json = buildRepoData(serverName).toJson(pretty = true)
         root.mkdirs()
-        repodataFile.writeText(json)
+        // Write to a sibling temp file then ATOMIC_MOVE so readers never see a
+        // partially written index (same filesystem, so the move is atomic).
+        val tmp = File.createTempFile("repodata-", ".json.tmp", root)
+        try {
+            tmp.writeText(json)
+            Files.move(
+                tmp.toPath(), repodataFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+            )
+        } finally {
+            if (tmp.exists()) tmp.delete()
+        }
         return repodataFile
     }
 

@@ -9,13 +9,19 @@ import kotlinx.coroutines.delay
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.repo.PackageEntry
 import meigo.tulpar.server.security.DownloadLimiter
-import meigo.tulpar.server.security.clientIp
+import meigo.tulpar.server.security.clientAddress
 import meigo.tulpar.server.security.PathSafety
 import java.io.File
 
 /**
  * Package download endpoints, with per-IP concurrency caps (HTTP 429) and
  * optional per-IP throughput throttling (token bucket).
+ *
+ * HEAD, Range (resume) and conditional GET are served by the engine plugins
+ * installed in [tulparModule] (AutoHeadResponse, PartialContent,
+ * ConditionalHeaders) on top of respondFile. Throttled streaming bypasses
+ * PartialContent, so a Range request is always served unthrottled and
+ * correctly.
  */
 fun Route.downloadRoutes(ctx: ServerContext) {
     val repo = ctx.repository
@@ -35,8 +41,9 @@ fun Route.downloadRoutes(ctx: ServerContext) {
         val file = repo.fileFor(entry)
         if (!file.isFile) return@get call.notFound("package file missing")
 
-        val ip = call.clientIp(behindProxy)
-        if (!limiter.tryAcquire(ip)) {
+        val addr = call.clientAddress(behindProxy)
+        val ip = addr.ip
+        if (!limiter.tryAcquire(ip, addr.fromProxyHeader)) {
             return@get call.respond(
                 HttpStatusCode.TooManyRequests,
                 ErrorResponse("too_many_downloads", "concurrent download limit reached for your IP"),
@@ -44,13 +51,14 @@ fun Route.downloadRoutes(ctx: ServerContext) {
         }
         try {
             call.attachmentHeader(entry.coordinates.fileName)
-            if (limiter.throttled(ip)) {
+            val wantsRange = call.request.headers[HttpHeaders.Range] != null
+            if (!wantsRange && limiter.throttled(ip, addr.fromProxyHeader)) {
                 call.respondThrottled(file, limiter, ip)
             } else {
                 call.respondFile(file)
             }
         } finally {
-            limiter.release(ip)
+            limiter.release(ip, addr.fromProxyHeader)
         }
     }
 }

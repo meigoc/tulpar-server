@@ -15,6 +15,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class PublishRoutesTest {
 
@@ -145,11 +146,29 @@ class PublishRoutesTest {
     }
 
     @Test
-    fun `invalid package is rejected with 422`() = testApplication {
+    fun `non-archive payload is rejected with 400 by the magic preflight`() = testApplication {
         application { tulparModule(ctx()) }
         val resp = client.submitFormWithBinaryData(
             "/api/v2/packages",
             uploadForm("garbage".toByteArray()),
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `structurally valid archive failing libAPG policy is rejected with 422`() = testApplication {
+        application { tulparModule(ctx()) }
+        // A real tar.xz whose metadata has no name/version: recognizable
+        // archive (passes the preflight) but not indexable.
+        val pkg = ApgTestFixtures.tarXz(
+            linkedMapOf(
+                "metadata.json" to """{"description":"no identity"}""".toByteArray(),
+                "data/usr/bin/x" to "y".toByteArray(),
+            ),
+        )
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            uploadForm(pkg),
         ) { header(HttpHeaders.Authorization, "Bearer $token") }
         assertEquals(HttpStatusCode.UnprocessableEntity, resp.status)
     }
@@ -180,5 +199,76 @@ class PublishRoutesTest {
             HttpStatusCode.NotFound,
             client.get("/api/v2/download/main/curl/7.85.0/x86_64").status,
         )
+    }
+}
+
+class PublishLimitsTest {
+
+    private val root: File = WebTestSupport.tempRepo()
+    private val token = "secret-token"
+
+    @AfterTest
+    fun cleanup() = root.deleteRecursively().let {}
+
+    private fun ctxWithUploadCap(capBytes: Long): ServerContext {
+        val publish = PublishConfig(
+            enabled = true, tokens = listOf(token), validate = true,
+            allowOverwrite = true, maxUploadBytes = capBytes,
+        )
+        val config = TulparConfig(publish = publish).copy(repo = TulparConfig().repo.copy(root = root.path))
+        val repo = Repository(root).apply { reindex() }
+        return ServerContext(config, repo)
+    }
+
+    private fun uploadForm(pkg: ByteArray) = formData {
+        append("apg", pkg, Headers.build {
+            append(HttpHeaders.ContentDisposition, "filename=\"pkg.apg\"")
+        })
+    }
+
+    @Test
+    fun `upload over the size cap returns 413`() = testApplication {
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        application { tulparModule(ctxWithUploadCap(capBytes = pkg.size.toLong() / 2)) }
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            uploadForm(pkg),
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.PayloadTooLarge, resp.status)
+    }
+
+    @Test
+    fun `failed uploads leave no temp files behind`() = testApplication {
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        application { tulparModule(ctxWithUploadCap(capBytes = pkg.size.toLong() / 2)) }
+        client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            uploadForm(pkg),
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+
+        val staging = File(root, ".tmp")
+        val leftovers = if (staging.isDirectory) staging.listFiles()?.toList() ?: emptyList() else emptyList()
+        assertEquals(emptyList(), leftovers, "staging dir must be empty after a rejected upload")
+        // nothing indexed either
+        assertEquals(0, Repository(root).apply { reindex() }.entries().size)
+    }
+
+    @Test
+    fun `successful publish leaves no temp files behind`() = testApplication {
+        application { tulparModule(ctxWithUploadCap(capBytes = 10L * 1024 * 1024)) }
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            uploadForm(pkg),
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.Created, resp.status)
+
+        val staging = File(root, ".tmp")
+        val leftovers = if (staging.isDirectory) staging.listFiles()?.toList() ?: emptyList() else emptyList()
+        assertEquals(emptyList(), leftovers, "staging dir must be empty after a successful publish")
+        // the package itself is in the pool, byte-identical
+        val stored = File(root, "pool/main/curl/x86_64/curl-7.85.0-x86_64.apg")
+        assertTrue(stored.isFile)
+        assertEquals(pkg.toList(), stored.readBytes().toList())
     }
 }

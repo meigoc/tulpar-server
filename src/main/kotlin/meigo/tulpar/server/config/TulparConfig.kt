@@ -104,3 +104,80 @@ object ConfigFactory {
         return builder.build().loadConfigOrThrow<TulparConfig>()
     }
 }
+
+/**
+ * Startup-time validation: refuses configurations that cannot serve safely
+ * and reports every problem at once. Warnings (insecure-but-working setups)
+ * are returned separately so the CLI can print them loudly without refusing.
+ */
+object ConfigValidation {
+
+    /** Minimum accepted publish token length. */
+    const val MIN_TOKEN_LENGTH = 32
+
+    /** Keystore passwords that ship with tooling defaults and must be flagged. */
+    private val DEFAULT_KEYSTORE_PASSWORDS = setOf("changeit", "changeme", "")
+
+    data class Result(val errors: List<String>, val warnings: List<String>) {
+        val valid: Boolean get() = errors.isEmpty()
+    }
+
+    fun validate(config: TulparConfig): Result {
+        val errors = ArrayList<String>()
+        val warnings = ArrayList<String>()
+
+        with(config.server) {
+            if (port !in 1..65535) errors.add("server.port out of range (1..65535): $port")
+            if (tls.enabled) {
+                if (tls.port !in 1..65535) errors.add("server.tls.port out of range: ${tls.port}")
+                if (tls.keyStorePath.isBlank()) errors.add("server.tls.enabled but keyStorePath is empty")
+                if (tls.keyStorePassword in DEFAULT_KEYSTORE_PASSWORDS) {
+                    warnings.add("server.tls uses a default/empty keystore password — set a strong one")
+                }
+                if (tls.privateKeyPassword in DEFAULT_KEYSTORE_PASSWORDS) {
+                    warnings.add("server.tls uses a default/empty private-key password — set a strong one")
+                }
+            }
+            if (httpsRedirect && !tls.enabled) {
+                errors.add("server.httpsRedirect=true requires server.tls.enabled=true")
+            }
+        }
+
+        with(config.repo) {
+            if (root.isBlank()) errors.add("repo.root is empty")
+        }
+
+        with(config.limits) {
+            if (maxRequestsPerWindow < 1) errors.add("limits.maxRequestsPerWindow must be >= 1")
+            if (windowMillis < 1) errors.add("limits.windowMillis must be >= 1")
+            if (banDurationMillis < 0) errors.add("limits.banDurationMillis must be >= 0")
+            if (maxDownloadsPerIP < 1) errors.add("limits.maxDownloadsPerIP must be >= 1")
+            if (maxDownloadSpeed < 0) errors.add("limits.maxDownloadSpeed must be >= 0")
+            if (bufferSize < 1024) errors.add("limits.bufferSize must be >= 1024")
+        }
+
+        with(config.publish) {
+            if (enabled) {
+                if (tokens.isEmpty()) {
+                    errors.add("publish.enabled=true but no tokens are configured — publishing would be wide open; set publish.tokens (env substitution like \${TULPAR_PUBLISH_TOKEN} is supported)")
+                }
+                for ((i, token) in tokens.withIndex()) {
+                    if (token.isNotBlank() && token.length < MIN_TOKEN_LENGTH) {
+                        errors.add("publish.tokens[$i] is shorter than $MIN_TOKEN_LENGTH characters")
+                    }
+                }
+                if (requireSignature && keyringDir.isBlank()) {
+                    errors.add("publish.requireSignature=true requires publish.keyringDir (a directory of *.key files)")
+                }
+            }
+            if (maxUploadBytes < 1) errors.add("publish.maxUploadBytes must be >= 1")
+            if (maxSignatureBytes < 64) errors.add("publish.maxSignatureBytes must be >= 64")
+        }
+
+        with(config.metrics) {
+            if (enabled && intervalMillis < 1000) errors.add("metrics.intervalMillis must be >= 1000 when metrics are enabled")
+        }
+
+        return Result(errors, warnings)
+    }
+}

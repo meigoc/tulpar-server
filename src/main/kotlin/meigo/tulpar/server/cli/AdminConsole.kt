@@ -16,7 +16,6 @@ class AdminConsole(
     private val ctx: ServerContext,
     private val engine: EmbeddedServer<*, *>,
     private val metrics: MetricsCollector,
-    private val onRestart: () -> Unit = {},
 ) {
     private data class Command(val help: String, val run: (List<String>) -> Unit)
 
@@ -55,7 +54,6 @@ class AdminConsole(
             else bans.forEach { (ip, until) -> println("  $ip until ${timeFmt.format(Instant.ofEpochMilli(until))}") }
         }
         register("version", "show server version") { println(meigo.tulpar.server.Version.SERVER_NAME) }
-        register("restart", "restart the server") { onRestart() }
         register("stop", "stop the server and exit") { shutdown() }
     }
 

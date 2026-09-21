@@ -39,6 +39,12 @@ fun Application.tulparModule(ctx: ServerContext) {
         })
     }
 
+    // HEAD for every GET, byte-range resume for file downloads, and
+    // conditional GET (ETag/If-None-Match → 304) for cacheable responses.
+    install(io.ktor.server.plugins.autohead.AutoHeadResponse)
+    install(io.ktor.server.plugins.partialcontent.PartialContent)
+    install(io.ktor.server.plugins.conditionalheaders.ConditionalHeaders)
+
     install(StatusPages) {
         exception<Throwable> { call, cause ->
             call.respond(

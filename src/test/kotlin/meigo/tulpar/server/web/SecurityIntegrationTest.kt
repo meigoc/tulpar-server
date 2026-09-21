@@ -1,10 +1,13 @@
 package meigo.tulpar.server.web
 
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
 import io.ktor.server.testing.*
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.config.LimitsConfig
+import meigo.tulpar.server.config.ServerConfig
 import meigo.tulpar.server.config.TulparConfig
 import meigo.tulpar.server.repo.Repository
 import meigo.tulpar.server.security.DownloadLimiter
@@ -67,5 +70,111 @@ class SecurityIntegrationTest {
         assertTrue(limiter.tryAcquire(ip))
         val resp = client.get("/api/v2/download/main/curl/7.85.0/x86_64")
         assertEquals(HttpStatusCode.TooManyRequests, resp.status)
+    }
+}
+
+class DownloadsAndProxyTest {
+
+    private val root: File = WebTestSupport.tempRepo()
+
+    @AfterTest
+    fun cleanup() = root.deleteRecursively().let {}
+
+    private fun ctx(behindProxy: Boolean = false, limits: LimitsConfig = LimitsConfig()): ServerContext {
+        WebTestSupport.place(root, "curl", "7.85.0", "x86_64")
+        val config = TulparConfig(server = ServerConfig(behindProxy = behindProxy), limits = limits)
+            .copy(repo = TulparConfig().repo.copy(root = root.path))
+        val repo = Repository(root).apply { reindex() }
+        return ServerContext(config, repo)
+    }
+
+    @Test
+    fun `HEAD download returns headers without body`() = testApplication {
+        application { tulparModule(ctx()) }
+        val resp = client.head("/api/v2/download/main/curl/7.85.0/x86_64")
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val len = resp.headers[HttpHeaders.ContentLength]?.toLong()
+        assertTrue(len != null && len > 0, "Content-Length must be set: $len")
+        assertEquals(0, resp.bodyAsBytes().size)
+    }
+
+    @Test
+    fun `Range request resumes a download with 206`() = testApplication {
+        application { tulparModule(ctx()) }
+        val full = client.get("/api/v2/download/main/curl/7.85.0/x86_64").bodyAsBytes()
+        val resp = client.get("/api/v2/download/main/curl/7.85.0/x86_64") {
+            header(HttpHeaders.Range, "bytes=10-19")
+        }
+        assertEquals(HttpStatusCode.PartialContent, resp.status)
+        assertEquals(full.copyOfRange(10, 20).toList(), resp.bodyAsBytes().toList())
+    }
+
+    @Test
+    fun `conditional GET on repodata uses ETag and returns 304`() = testApplication {
+        application { tulparModule(ctx()) }
+        val first = client.get("/api/v2/repodata")
+        assertEquals(HttpStatusCode.OK, first.status)
+        val etag = first.headers[HttpHeaders.ETag]
+        assertTrue(etag != null, "ETag expected on repodata")
+        val second = client.get("/api/v2/repodata") { header(HttpHeaders.IfNoneMatch, etag!!) }
+        assertEquals(HttpStatusCode.NotModified, second.status)
+    }
+
+    @Test
+    fun `XFF rightmost hop is used behind a proxy and ignored otherwise`() = testApplication {
+        // behindProxy=true: the rightmost XFF entry is the proxy-vouched peer.
+        val limits = LimitsConfig(maxRequestsPerWindow = 2, exemptLoopback = false)
+        application { tulparModule(ctx(behindProxy = true, limits = limits)) }
+        // Two requests "from" 1.2.3.4 (rightmost), then it is banned; a
+        // different rightmost address keeps working (proves per-IP keying).
+        repeat(2) {
+            assertEquals(
+                HttpStatusCode.OK,
+                client.get("/api/v2/health") { header("X-Forwarded-For", "9.9.9.9, 1.2.3.4") }.status,
+            )
+        }
+        assertEquals(
+            HttpStatusCode.TooManyRequests,
+            client.get("/api/v2/health") { header("X-Forwarded-For", "spoofed, 1.2.3.4") }.status,
+        )
+        assertEquals(
+            HttpStatusCode.OK,
+            client.get("/api/v2/health") { header("X-Forwarded-For", "1.2.3.4, 5.6.7.8") }.status,
+        )
+    }
+
+    @Test
+    fun `spoofed XFF is ignored when not behind a proxy`() = testApplication {
+        val limits = LimitsConfig(maxRequestsPerWindow = 2, exemptLoopback = false)
+        application { tulparModule(ctx(behindProxy = false, limits = limits)) }
+        // All requests come from the test client's socket IP regardless of XFF.
+        repeat(2) {
+            assertEquals(
+                HttpStatusCode.OK,
+                client.get("/api/v2/health") { header("X-Forwarded-For", "8.8.8.8") }.status,
+            )
+        }
+        assertEquals(
+            HttpStatusCode.TooManyRequests,
+            client.get("/api/v2/health") { header("X-Forwarded-For", "9.9.9.9") }.status,
+        )
+    }
+
+    @Test
+    fun `proxied loopback traffic is NOT exempt from rate limiting`() = testApplication {
+        // The reverse proxy runs on localhost; every client would claim
+        // 127.0.0.1 through XFF if the exemption applied to proxy headers.
+        val limits = LimitsConfig(maxRequestsPerWindow = 2, exemptLoopback = true)
+        application { tulparModule(ctx(behindProxy = true, limits = limits)) }
+        repeat(2) {
+            assertEquals(
+                HttpStatusCode.OK,
+                client.get("/api/v2/health") { header("X-Forwarded-For", "127.0.0.1") }.status,
+            )
+        }
+        assertEquals(
+            HttpStatusCode.TooManyRequests,
+            client.get("/api/v2/health") { header("X-Forwarded-For", "127.0.0.1") }.status,
+        )
     }
 }

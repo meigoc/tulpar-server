@@ -2,6 +2,7 @@ package meigo.tulpar.server.cli
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
+import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -17,6 +18,7 @@ import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.Version
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.config.ConfigFactory
+import meigo.tulpar.server.config.ConfigValidation
 import meigo.tulpar.server.config.TulparConfig
 import meigo.tulpar.server.metrics.MetricsCollector
 import meigo.tulpar.server.repo.Repository
@@ -49,8 +51,22 @@ class StartCommand : CliktCommand(name = "start") {
     private val daemon by option("-d", "--daemon", help = "Run without blocking (detached)").flag()
 
     override fun run() {
+        val config = try {
+            ConfigFactory.load(configPath)
+        } catch (e: Exception) {
+            terminal.println(TextColors.red("Configuration error: ${e.message}"))
+            throw ProgramResult(2)
+        }
+
+        val validation = ConfigValidation.validate(config)
+        validation.warnings.forEach { terminal.println(TextColors.yellow("WARNING: $it")) }
+        if (!validation.valid) {
+            validation.errors.forEach { terminal.println(TextColors.red("Config error: $it")) }
+            logger.error("refusing to start: {} configuration error(s)", validation.errors.size)
+            throw ProgramResult(2)
+        }
+
         try {
-            val config = ConfigFactory.load(configPath)
             val ctx = buildContext(config)
 
             val finalPort = port ?: config.server.port
@@ -90,6 +106,7 @@ class StartCommand : CliktCommand(name = "start") {
         } catch (e: Exception) {
             terminal.println(TextColors.red("Fatal Error: ${e.message}"))
             logger.error("failed to start server", e)
+            throw ProgramResult(1)
         }
     }
 

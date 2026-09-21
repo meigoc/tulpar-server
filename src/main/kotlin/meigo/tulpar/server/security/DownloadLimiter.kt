@@ -23,11 +23,12 @@ class DownloadLimiter(
     private val totalDownloads = AtomicLong(0)
     private val rejected = AtomicLong(0)
 
-    private fun exempt(ip: String): Boolean = limits.exemptLoopback && Loopback.matches(ip)
+    private fun exempt(ip: String, proxySupplied: Boolean): Boolean =
+        limits.exemptLoopback && !proxySupplied && Loopback.matches(ip)
 
     /** Try to start a download for [ip]; false if the per-IP cap is reached. */
-    fun tryAcquire(ip: String): Boolean {
-        if (exempt(ip)) { totalDownloads.incrementAndGet(); return true }
+    fun tryAcquire(ip: String, proxySupplied: Boolean = false): Boolean {
+        if (exempt(ip, proxySupplied)) { totalDownloads.incrementAndGet(); return true }
         var acquired = false
         // compute() holds the bin lock, so the cap check + increment is atomic
         // with respect to release() (which also uses compute) — the per-IP limit
@@ -47,8 +48,8 @@ class DownloadLimiter(
     }
 
     /** Release a previously acquired download slot. */
-    fun release(ip: String) {
-        if (exempt(ip)) return
+    fun release(ip: String, proxySupplied: Boolean = false) {
+        if (exempt(ip, proxySupplied)) return
         // compute() holds the bin lock so decrement-to-zero and removal are atomic
         // w.r.t. a concurrent computeIfAbsent in tryAcquire (no lost counter).
         active.compute(ip) { _, counter ->
@@ -65,7 +66,8 @@ class DownloadLimiter(
     fun rejectedDownloads(): Long = rejected.get()
 
     /** True if throughput limiting is active. */
-    fun throttled(ip: String): Boolean = !exempt(ip) && limits.maxDownloadSpeed > 0
+    fun throttled(ip: String, proxySupplied: Boolean = false): Boolean =
+        !exempt(ip, proxySupplied) && limits.maxDownloadSpeed > 0
 
     /**
      * A per-(IP,stream) token bucket. The streamer calls [reserve] before each
