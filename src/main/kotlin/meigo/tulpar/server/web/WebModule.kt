@@ -46,6 +46,24 @@ fun Application.tulparModule(ctx: ServerContext) {
     install(io.ktor.server.plugins.conditionalheaders.ConditionalHeaders)
 
     install(StatusPages) {
+        // Ktor's multipart parser enforces receiveMultipart(formFieldLimit) in
+        // a background job and cancels the handler on breach, so the
+        // limit-exceeded IOException surfaces here rather than in the route's
+        // own try/catch. Map it to the same 413 the route emits for its own
+        // streaming guard.
+        exception<java.io.IOException> { call, cause ->
+            if (cause.message?.contains("exceeds limit") == true) {
+                call.respond(
+                    HttpStatusCode.PayloadTooLarge,
+                    ErrorResponse("payload_too_large", "upload exceeds the configured size limit"),
+                )
+            } else {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse("internal_error", cause.message),
+                )
+            }
+        }
         exception<Throwable> { call, cause ->
             call.respond(
                 HttpStatusCode.InternalServerError,

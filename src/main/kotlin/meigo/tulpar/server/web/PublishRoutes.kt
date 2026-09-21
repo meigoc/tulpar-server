@@ -54,7 +54,14 @@ fun Route.publishRoutes(ctx: ServerContext) {
                 val maxUpload = ctx.config.publish.maxUploadBytes
                 val maxSig = ctx.config.publish.maxSignatureBytes.toInt()
 
-                val multipart = call.receiveMultipart()
+                // Ktor caps its multipart boundary/form-field scan at
+                // formFieldLimit (default 50 MiB); a larger .apg part makes the
+                // following boundary search exceed that default and fail with a
+                // 500. Raise it to the configured upload cap. File part bodies
+                // still stream through a ByteReadChannel (consumed
+                // incrementally by streamToStaging), so this bound guards
+                // non-file buffering rather than preallocating a body buffer.
+                val multipart = call.receiveMultipart(formFieldLimit = maxUpload)
                 multipart.forEachPart { part ->
                     when (part) {
                         is PartData.FileItem -> {
