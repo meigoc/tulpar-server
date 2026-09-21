@@ -103,6 +103,51 @@ object ConfigFactory {
         builder.addResourceSource("/application.conf")
         return builder.build().loadConfigOrThrow<TulparConfig>()
     }
+
+    /**
+     * Keys present in [configFile] that the schema does not define — almost
+     * always typos that would otherwise be silently ignored. Detected by
+     * flattening the HOCON tree and diffing against [KNOWN_KEYS]; the bundled
+     * defaults are subtracted so only file-introduced unknowns are reported.
+     */
+    fun unknownKeys(configFile: File): List<String> {
+        if (!configFile.exists()) return emptyList()
+        return try {
+            val parsed = com.typesafe.config.ConfigFactory.parseFile(configFile)
+                .resolve(com.typesafe.config.ConfigResolveOptions.defaults().setAllowUnresolved(true))
+            parsed.entrySet().map { it.key }
+                .filter { normalizeKey(it) !in KNOWN_KEYS }
+                .sorted()
+        } catch (e: Exception) {
+            // An unparseable file fails loudly in load(); nothing to add here.
+            emptyList()
+        }
+    }
+
+    /** Strip HOCON quoting so `a.b` and `"a".b` compare equal. */
+    private fun normalizeKey(key: String): String =
+        key.split('.').joinToString(".") { it.trim('"') }
+
+    /** Every leaf and branch path the schema recognizes. */
+    private val KNOWN_KEYS: Set<String> = buildSet {
+        fun section(branch: String, vararg leaves: String) {
+            add(branch)
+            for (l in leaves) add("$branch.$l")
+        }
+        section("server", "address", "port", "runInBackground", "httpsRedirect", "behindProxy")
+        section("server.tls", "enabled", "port", "keyStorePath", "keyStorePassword", "keyAlias", "privateKeyPassword")
+        section("repo", "root", "defaultChannel", "reindexOnStart")
+        section(
+            "limits", "maxRequestsPerWindow", "windowMillis", "banDurationMillis",
+            "maxDownloadsPerIP", "maxDownloadSpeed", "bufferSize", "exemptLoopback",
+        )
+        section(
+            "publish", "enabled", "tokens", "validate", "requireSignature",
+            "keyringDir", "allowOverwrite", "maxUploadBytes", "maxSignatureBytes",
+        )
+        section("metrics", "enabled", "intervalMillis")
+        section("cli", "color", "hello")
+    }
 }
 
 /**

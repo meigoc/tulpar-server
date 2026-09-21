@@ -118,3 +118,38 @@ class ConfigValidationTest {
         assertTrue(result.warnings.isEmpty(), result.warnings.toString())
     }
 }
+
+class ConfigUnknownKeysTest {
+
+    @Test
+    fun `unknown keys are detected and known keys are not flagged`() {
+        val file = java.nio.file.Files.createTempFile("tulpar-conf", ".conf").toFile()
+        try {
+            file.writeText(
+                """
+                server {
+                    port = 9090
+                    behindProxy = true
+                    adresss = "typo.example"
+                }
+                publish {
+                    enabled = false
+                    tokenz = ["typo"]
+                }
+                limts {
+                    bufferSize = 4096
+                }
+                """.trimIndent(),
+            )
+            val unknown = ConfigFactory.unknownKeys(file)
+            assertEquals(listOf("limts.bufferSize", "publish.tokenz", "server.adresss"), unknown)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `missing file yields no warnings`() {
+        assertEquals(emptyList(), ConfigFactory.unknownKeys(java.io.File("/nonexistent-tulpar.conf")))
+    }
+}

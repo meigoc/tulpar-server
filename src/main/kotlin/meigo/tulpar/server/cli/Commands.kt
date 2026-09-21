@@ -52,6 +52,9 @@ class StartCommand : CliktCommand(name = "start") {
 
     override fun run() {
         val config = try {
+            ConfigFactory.unknownKeys(configPath).forEach {
+                logger.warn("config: unknown key '{}' in {} (ignored)", it, configPath)
+            }
             ConfigFactory.load(configPath)
         } catch (e: Exception) {
             terminal.println(TextColors.red("Configuration error: ${e.message}"))
