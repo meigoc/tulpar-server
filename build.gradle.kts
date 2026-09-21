@@ -127,6 +127,7 @@ tasks.register<Exec>("regenerateConformanceGoldens") {
     commandLine(
         "bash", "-c",
         "python3 conformance/matrix-generator.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance && " +
-            "python3 conformance/regenerate-parse-goldens.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance",
+            "python3 conformance/regenerate-parse-goldens.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance && " +
+            "python3 conformance/regenerate-signature-goldens.py '${apgOracle ?: "/bin/false"}' src/test/resources/conformance",
     )
 }

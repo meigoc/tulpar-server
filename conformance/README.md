@@ -56,7 +56,8 @@ The task re-runs the oracle over the committed corpus and version/dependency
 matrices and asserts the outputs still match the checked-in goldens. It is
 skipped (with a loud message) when `-PapgOracle` is absent, so plain
 `./gradlew test` stays hermetic. CI runs it against a freshly built libAPG at
-the pinned commit.
+the pinned commit. It covers four families: `parse-corpus`, `vercmp`,
+`depparse`, and `signatures` (keyring_verify over the Ed25519ph vectors).
 
 ## Regenerating goldens
 
@@ -65,6 +66,10 @@ Only do this after intentionally moving the libAPG pin, and review the diff:
 ```sh
 ./gradlew regenerateConformanceGoldens -PapgOracle=/path/to/apg_oracle
 ```
+
+This rebuilds the version/dependency matrices (`matrix-generator.py`), the
+parse-corpus goldens (`regenerate-parse-goldens.py`), and the signature
+verdicts (`regenerate-signature-goldens.py`).
 
 ## Corpus provenance
 

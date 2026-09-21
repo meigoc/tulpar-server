@@ -68,6 +68,25 @@ def check_depparse(oracle, resdir):
     return mismatches
 
 
+def check_signatures(oracle, resdir):
+    path = os.path.join(resdir, "goldens-signatures.json")
+    if not os.path.isfile(path):
+        return []
+    goldens = json.load(open(path))
+    sigdir = os.path.join(resdir, "signatures")
+    mismatches = []
+    for g in goldens:
+        actual = run_oracle(oracle, [
+            "keyring",
+            os.path.join(sigdir, g["keyring"]),
+            os.path.join(sigdir, g["pkg"]),
+            os.path.join(sigdir, g["sig"]),
+        ], timeout=30)
+        if actual != g["oracle"]:
+            mismatches.append(f"{g['case']}: golden={g['oracle']} live={actual}")
+    return mismatches
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -78,7 +97,13 @@ def main():
         return 2
 
     failures = {}
-    for label, fn in (("parse-corpus", check_parse), ("vercmp", check_vercmp), ("depparse", check_depparse)):
+    checks = (
+        ("parse-corpus", check_parse),
+        ("vercmp", check_vercmp),
+        ("depparse", check_depparse),
+        ("signatures", check_signatures),
+    )
+    for label, fn in checks:
         mm = fn(oracle, resdir)
         if mm:
             failures[label] = mm
