@@ -77,13 +77,15 @@ class Repository(val root: File) {
         }
         // Latest build first within each name: the Tulpar client resolves to the
         // first satisfying build (resolve.c takes the first match), so the order
-        // must follow libAPG ver_compare, newest first. Ties break on arch then
-        // channel for a deterministic listing.
+        // must follow libAPG ver_compare, newest first. Remaining tie-breakers
+        // (arch, channel, version text) make the listing byte-deterministic even
+        // for ver_compare-equal versions such as "0:9.9" and "9.9".
         val ordered = found.sortedWith(
             Comparator.comparing { e: PackageEntry -> e.name }
                 .thenComparing(Comparator { a, b -> ApgVersion.compare(b.version, a.version) })
                 .thenComparing { e -> e.arch }
-                .thenComparing { e -> e.channel },
+                .thenComparing { e -> e.channel }
+                .thenComparing { e -> e.version },
         )
         snapshot.set(Snapshot(ordered, Instant.now()))
         log.info("indexed {} package(s) from {}", ordered.size, pool)

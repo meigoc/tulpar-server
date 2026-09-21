@@ -141,3 +141,27 @@ class ApgArchiveTest {
         assertEquals(listOf("usr/bin/x"), archive.dataFiles())
     }
 }
+
+class ScriptAndHomeListingTest {
+
+    @Test
+    fun `scripts and home entries are listed without execution or extraction`() {
+        val bytes = ApgTestFixtures.tarXz(
+            linkedMapOf(
+                "metadata.json" to """{"name":"x","version":"1"}""".toByteArray(),
+                "data/usr/bin/x" to "bin".toByteArray(),
+                "scripts/pre-install" to "#!/bin/sh\nexit 0\n".toByteArray(),
+                "scripts/post_install" to "#!/bin/sh\nexit 0\n".toByteArray(),
+                "scripts/nested/deep" to "x".toByteArray(),
+                "home/.config/x" to "cfg".toByteArray(),
+            ),
+        )
+        val archive = ApgArchive.read(ByteArrayInputStream(bytes))
+        // Basenames only, nested paths excluded; libAPG matches names with
+        // '-'/'_' stripped case-insensitively, the listing keeps both spellings.
+        assertEquals(listOf("post_install", "pre-install"), archive.scriptNames())
+        assertTrue(archive.hasDataDir())
+        assertTrue(archive.has("home/.config/x"))
+        assertEquals(listOf("usr/bin/x"), archive.dataFiles())
+    }
+}

@@ -62,6 +62,57 @@ class RepositoryTest {
     }
 
     @Test
+    fun `builds are ordered latest-first by libAPG ver_compare`() {
+        // The Tulpar client resolves to the FIRST satisfying build
+        // (resolve.c:437-446), so the index must sort newest first.
+        place("curl", "7.9.0", "x86_64")
+        place("curl", "7.85.0", "x86_64")
+        place("curl", "7.100.0", "x86_64")
+        val repo = Repository(tmp)
+        repo.reindex()
+        assertEquals(
+            listOf("7.100.0", "7.85.0", "7.9.0"),
+            repo.byName("curl").map { it.version },
+        )
+    }
+
+    @Test
+    fun `epoch versions order above plain versions`() {
+        place("pkg", "1:1.0", "x86_64")
+        place("pkg", "0:9.9", "x86_64")
+        place("pkg", "9.9", "x86_64")
+        val repo = Repository(tmp)
+        repo.reindex()
+        val versions = repo.byName("pkg").map { it.version }
+        // 1:1.0 (epoch 1) is newest; "0:9.9" and "9.9" are ver_compare-EQUAL
+        // (epoch 0 == no epoch) and ordered deterministically by version text.
+        assertEquals("1:1.0", versions[0])
+        assertEquals(setOf("0:9.9", "9.9"), versions.subList(1, 3).toSet())
+        assertEquals(listOf("0:9.9", "9.9"), versions.subList(1, 3))
+    }
+
+    @Test
+    fun `libAPG-rejected pool contents are excluded with a warning not indexed`() {
+        // Core invariant: tolerated-but-libAPG-rejected packages in a
+        // pre-existing pool must never appear as installable.
+        place("curl", "7.85.0", "x86_64")
+        val bad = File(tmp, "pool/main/noDataDir/x86_64")
+        bad.mkdirs()
+        // metadata.json present but no data/ directory: parse_package succeeds,
+        // install_data_dir would fail — the server's compat verdict rejects it.
+        File(bad, "noDataDir-1-x86_64.apg").writeBytes(
+            ApgTestFixtures.tarXz(
+                linkedMapOf("metadata.json" to """{"name":"noDataDir","version":"1"}""".toByteArray()),
+            ),
+        )
+
+        val repo = Repository(tmp)
+        val count = repo.reindex()
+        assertEquals(1, count)
+        assertNull(repo.find("main", "noDataDir", "1", "x86_64"))
+    }
+
+    @Test
     fun `repodata json reflects index`() {
         place("curl", "7.85.0", "x86_64", withSig = true)
         val repo = Repository(tmp)
