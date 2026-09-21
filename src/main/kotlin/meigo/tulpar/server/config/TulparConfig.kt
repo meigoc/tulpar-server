@@ -69,8 +69,19 @@ data class PublishConfig(
     val validate: Boolean = true,
     /** Require a detached .sig alongside uploaded packages. */
     val requireSignature: Boolean = false,
+    /**
+     * Directory of trusted signing keys for signature verification
+     * (libAPG keyring format: `*.key` files holding 32 raw Ed25519 public
+     * key bytes). Required when [requireSignature] is true; when set, any
+     * accompanying .sig is verified even if signatures are optional.
+     */
+    val keyringDir: String = "",
     /** Allow overwriting an existing package build. */
     val allowOverwrite: Boolean = false,
+    /** Hard cap on a single uploaded .apg payload, in bytes. */
+    val maxUploadBytes: Long = 4L * 1024 * 1024 * 1024,
+    /** Hard cap on an uploaded .sig payload, in bytes. */
+    val maxSignatureBytes: Long = 4096,
 )
 
 data class MetricsConfig(

@@ -1,6 +1,6 @@
 package meigo.tulpar.server.repo
 
-import meigo.tulpar.server.apg.ApgArchive
+import meigo.tulpar.server.apg.ApgSignature
 import meigo.tulpar.server.apg.ApgValidationResult
 import meigo.tulpar.server.apg.ApgValidator
 import meigo.tulpar.server.config.PublishConfig
@@ -57,6 +57,10 @@ class PublishService(
     fun publish(apgBytes: ByteArray, sigBytes: ByteArray?, channel: String? = null): PublishResult {
         val ch = channel?.takeIf { it.isNotBlank() } ?: defaultChannel
 
+        if (apgBytes.size > config.maxUploadBytes) {
+            return PublishResult.Rejected("upload exceeds ${config.maxUploadBytes} bytes")
+        }
+
         // Validate from the bytes (no disk write yet). The validator reads the
         // archive once, streaming, with the limits applied to uploads.
         val validation: ApgValidationResult = validator.validateBytes(apgBytes)
@@ -68,7 +72,21 @@ class PublishService(
         if (config.validate && !validation.ok) {
             return PublishResult.Rejected("package failed validation", validation.errors)
         }
-        if (config.requireSignature && sigBytes == null) {
+
+        // Detached-signature policy. A present .sig is always verified against
+        // the libAPG-compatible keyring; an invalid signature is rejected even
+        // when signatures are optional (the server never stores a package whose
+        // attached signature does not verify). A missing .sig is rejected only
+        // when requireSignature is set.
+        if (sigBytes != null) {
+            if (sigBytes.size > config.maxSignatureBytes) {
+                return PublishResult.Rejected("signature exceeds ${config.maxSignatureBytes} bytes")
+            }
+            val verdict = verifySignature(apgBytes, sigBytes)
+            if (verdict != ApgSignature.VerifyResult.VERIFIED) {
+                return PublishResult.Rejected("detached signature failed verification ($verdict)")
+            }
+        } else if (config.requireSignature) {
             return PublishResult.Rejected("a detached signature (.sig) is required by server policy")
         }
 
@@ -112,6 +130,22 @@ class PublishService(
             repository.reindex()
             return DeleteResult.Deleted
         }
+    }
+
+    /**
+     * Verify a detached signature over package bytes against the configured
+     * libAPG-compatible keyring. Mirrors libAPG trans_commit: the keyring is
+     * loaded per verification (keyring.c keyring_load), and an unusable keyring
+     * fails closed.
+     */
+    private fun verifySignature(apgBytes: ByteArray, sigBytes: ByteArray): ApgSignature.VerifyResult {
+        if (config.keyringDir.isBlank()) {
+            log.warn("signature presented but publish.keyringDir is not configured; rejecting")
+            return ApgSignature.VerifyResult.EMPTY_KEYRING
+        }
+        val keyring = ApgSignature.loadKeyring(File(config.keyringDir))
+        if (keyring.isEmpty()) return ApgSignature.VerifyResult.EMPTY_KEYRING
+        return ApgSignature.verifyBytes(apgBytes, sigBytes, keyring)
     }
 
     private fun atomicWrite(target: File, bytes: ByteArray) {

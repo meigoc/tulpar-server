@@ -17,6 +17,15 @@ proves it.
   - `vercmp <a> <b>` — `ver_compare()` signum,
   - `depparse <constraint>` — `dep_constraint_parse()` + canonical form,
   - `keyring <dir> <pkg> <sig>` — `keyring_load()` + `keyring_verify()`.
+- `oracle/apg_sigtool.c` — generates genuine libAPG-format signatures:
+  - `keygen <seed-hex32> <out-secret.key> <out-public.key>` — deterministic
+    keypair from a fixed seed (reproducible vectors),
+  - `sign <secret.key> <pkg> <out.sig>` — signs with libAPG's exact
+    libsodium streaming sequence (`crypto_sign_init/update/final_create`,
+    i.e. **Ed25519ph**),
+  - `verify <keyring-dir> <pkg> <sig>` — `keyring_verify()` JSON verdict.
+  The vectors under `signatures/` were produced with this tool; the JVM
+  verifier is asserted equal to the oracle's verdict on every scenario.
 - `../src/test/resources/conformance/corpus/` — the committed archive corpus
   (valid, invalid, adversarial; generated programmatically, see
   `corpus-generator.py`).

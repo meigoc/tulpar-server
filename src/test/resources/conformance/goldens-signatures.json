@@ -1,0 +1,112 @@
+[
+  {
+    "case": "valid-keyA",
+    "keyring": "keyring-a",
+    "pkg": "payload.bin",
+    "sig": "payload.sig",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": true
+    }
+  },
+  {
+    "case": "unknown-key",
+    "keyring": "keyring-a",
+    "pkg": "payload.bin",
+    "sig": "payload.sig.byB",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "any-key-signs",
+    "keyring": "keyring-ab",
+    "pkg": "payload.bin",
+    "sig": "payload.sig.byB",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": true
+    }
+  },
+  {
+    "case": "malleable-S",
+    "keyring": "keyring-a",
+    "pkg": "payload.bin",
+    "sig": "payload.sig.malleable",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "tampered-payload",
+    "keyring": "keyring-a",
+    "pkg": "payload-tampered.bin",
+    "sig": "payload.sig",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "short-sig",
+    "keyring": "keyring-a",
+    "pkg": "payload.bin",
+    "sig": "payload.sig.short",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "empty-payload",
+    "keyring": "keyring-a",
+    "pkg": "empty.bin",
+    "sig": "empty.sig",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": true
+    }
+  },
+  {
+    "case": "empty-keyring",
+    "keyring": "keyring-empty",
+    "pkg": "payload.bin",
+    "sig": "payload.sig",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "short-key-skipped",
+    "keyring": "keyring-short",
+    "pkg": "payload.bin",
+    "sig": "payload.sig",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": false
+    }
+  },
+  {
+    "case": "long-key-truncated",
+    "keyring": "keyring-long",
+    "pkg": "payload.bin",
+    "sig": "payload.sig.byB",
+    "oracle": {
+      "keyring_loaded": true,
+      "verified": true
+    }
+  },
+  {
+    "case": "missing-keyring",
+    "keyring": "keyring-nope",
+    "pkg": "payload.bin",
+    "sig": "payload.sig",
+    "oracle": {
+      "keyring_loaded": false,
+      "verified": false
+    }
+  }
+]

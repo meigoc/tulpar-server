@@ -67,7 +67,7 @@ class PublishRoutesTest {
         application { tulparModule(ctx()) }
         val resp = client.submitFormWithBinaryData(
             "/api/v2/packages",
-            uploadForm(ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64"), sig = "sig".toByteArray()),
+            uploadForm(ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")),
         ) { header(HttpHeaders.Authorization, "Bearer $token") }
 
         assertEquals(HttpStatusCode.Created, resp.status)
@@ -82,6 +82,66 @@ class PublishRoutesTest {
             HttpStatusCode.OK,
             client.get("/api/v2/download/main/curl/7.85.0/x86_64").status,
         )
+    }
+
+    @Test
+    fun `upload with a present-but-invalid signature is rejected`() = testApplication {
+        // Security invariant: the server never stores a package whose attached
+        // signature does not verify, even when signatures are optional.
+        application { tulparModule(ctx()) }
+        val resp = client.submitFormWithBinaryData(
+            "/api/v2/packages",
+            uploadForm(ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64"), sig = "sig".toByteArray()),
+        ) { header(HttpHeaders.Authorization, "Bearer $token") }
+        assertEquals(HttpStatusCode.UnprocessableEntity, resp.status)
+    }
+
+    @Test
+    fun `upload with a keyring-verified signature succeeds`() = testApplication {
+        val keyring = java.nio.file.Files.createTempDirectory("tulpar-web-keyring").toFile()
+        try {
+            val kp = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+            val spec = java.security.KeyFactory.getInstance("Ed25519")
+                .getKeySpec(kp.public, java.security.spec.EdECPublicKeySpec::class.java)
+            val y = spec.point.y.toByteArray()
+            val raw = ByteArray(32)
+            val srcOff = maxOf(0, y.size - 32)
+            System.arraycopy(y, srcOff, raw, 32 - (y.size - srcOff), y.size - srcOff)
+            for (i in 0 until 16) {
+                val t = raw[i]; raw[i] = raw[31 - i]; raw[31 - i] = t
+            }
+            if (spec.point.isXOdd) raw[31] = (raw[31].toInt() or 0x80).toByte()
+            File(keyring, "web.key").writeBytes(raw)
+
+            val publish = PublishConfig(
+                enabled = true, tokens = listOf(token), validate = true,
+                allowOverwrite = true, keyringDir = keyring.path,
+            )
+            val config = TulparConfig(publish = publish)
+                .copy(repo = TulparConfig().repo.copy(root = root.path))
+            val repo = Repository(root).apply { reindex() }
+
+            application { tulparModule(ServerContext(config, repo)) }
+            val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+            val sig = java.security.Signature.getInstance("Ed25519").apply {
+                setParameter(java.security.spec.EdDSAParameterSpec(true))
+                initSign(kp.private)
+                update(pkg)
+            }.sign()
+
+            val resp = client.submitFormWithBinaryData(
+                "/api/v2/packages",
+                uploadForm(pkg, sig = sig),
+            ) { header(HttpHeaders.Authorization, "Bearer $token") }
+            assertEquals(HttpStatusCode.Created, resp.status)
+
+            // .sig is served back verbatim
+            val served = client.get("/api/v2/download/main/curl/7.85.0/x86_64.sig")
+            assertEquals(HttpStatusCode.OK, served.status)
+            assertEquals(sig.toList(), served.readBytes().toList())
+        } finally {
+            keyring.deleteRecursively()
+        }
     }
 
     @Test
