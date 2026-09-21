@@ -1,5 +1,7 @@
 package meigo.tulpar.server.apg
 
+import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.CRC32
 
@@ -7,8 +9,9 @@ import java.util.zip.CRC32
  * Parsing and verification of APG checksum files (`sha256sums`, `crc32sums`,
  * `md5sums`).
  *
- * The ecosystem is inconsistent about line order:
- *   - libAPG's `checksum.c` parses `HASH  RELPATH` (hash first).
+ * libAPG never reads these files (checksum verification is a server-only
+ * policy), but the ecosystem is inconsistent about line order:
+ *   - the `HASH  RELPATH` (hash first) form matches coreutils `*sum` output;
  *   - apgcheck and the real APGexample package write `RELPATH HASH` (path first).
  *
  * We read *tolerantly*: a line is split into two fields and the one that looks
@@ -30,8 +33,29 @@ enum class ChecksumAlgo(val fileName: String, val hexWidth: Int) {
         }
     }
 
+    /** Compute this algorithm's lowercase hex digest over a file, streaming. */
+    fun hexFile(file: File): String = file.inputStream().buffered().use { hexStream(it) }
+
+    /** Compute this algorithm's lowercase hex digest over a stream, streaming. */
+    fun hexStream(input: InputStream): String = when (this) {
+        CRC32 -> {
+            val crc = CRC32()
+            input.updateLoop { buf, n -> crc.update(buf, 0, n) }
+            "%08x".format(crc.value)
+        }
+        SHA256 -> MessageDigest.getInstance("SHA-256").let { d ->
+            input.updateLoop { buf, n -> d.update(buf, 0, n) }
+            d.digest().toHex()
+        }
+        MD5 -> MessageDigest.getInstance("MD5").let { d ->
+            input.updateLoop { buf, n -> d.update(buf, 0, n) }
+            d.digest().toHex()
+        }
+    }
+
     companion object {
-        /** Detection priority matches libAPG `verify_checksums`: sha256 → crc32 → md5. */
+        /** Detection priority: sha256 → crc32 → md5 (server policy; libAPG itself
+         *  never reads sums files). */
         val byPriority = listOf(SHA256, CRC32, MD5)
     }
 }
@@ -80,7 +104,20 @@ object Checksums {
 
 private fun ByteArray.messageDigestHex(algorithm: String): String {
     val digest = MessageDigest.getInstance(algorithm).digest(this)
-    val sb = StringBuilder(digest.size * 2)
-    for (byte in digest) sb.append("%02x".format(byte))
+    return digest.toHex()
+}
+
+private fun ByteArray.toHex(): String {
+    val sb = StringBuilder(size * 2)
+    for (byte in this) sb.append("%02x".format(byte))
     return sb.toString()
+}
+
+private fun InputStream.updateLoop(update: (ByteArray, Int) -> Unit) {
+    val buf = ByteArray(64 * 1024)
+    while (true) {
+        val r = read(buf)
+        if (r < 0) break
+        update(buf, r)
+    }
 }

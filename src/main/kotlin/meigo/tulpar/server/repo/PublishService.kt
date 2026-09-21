@@ -57,16 +57,14 @@ class PublishService(
     fun publish(apgBytes: ByteArray, sigBytes: ByteArray?, channel: String? = null): PublishResult {
         val ch = channel?.takeIf { it.isNotBlank() } ?: defaultChannel
 
-        // Read metadata + validate from the bytes (no disk write yet).
-        val archive = try {
-            ApgArchive.read(apgBytes.inputStream())
-        } catch (e: Exception) {
-            return PublishResult.Rejected("cannot read archive: ${e.message}")
+        // Validate from the bytes (no disk write yet). The validator reads the
+        // archive once, streaming, with the limits applied to uploads.
+        val validation: ApgValidationResult = validator.validateBytes(apgBytes)
+        if (!validation.libapgCompatible) {
+            return PublishResult.Rejected("package is not acceptable to libAPG", validation.rejectionReasons)
         }
-        val meta = archive.metadata()
-            ?: return PublishResult.Rejected("archive has no parseable metadata.json/meta.json")
-
-        val validation: ApgValidationResult = validator.validate(archive)
+        val meta = validation.metadata
+            ?: return PublishResult.Rejected("archive has no parseable metadata.json with name/version strings")
         if (config.validate && !validation.ok) {
             return PublishResult.Rejected("package failed validation", validation.errors)
         }

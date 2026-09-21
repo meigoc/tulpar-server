@@ -102,7 +102,7 @@ class StartCommand : CliktCommand(name = "start") {
 }
 
 class CheckCommand : CliktCommand(name = "check") {
-    override fun help(context: Context) = "Validate an .apg package against the APG spec"
+    override fun help(context: Context) = "Validate an .apg package the way libAPG would read it"
 
     private val file by argument(name = "file", help = "Path to the .apg file")
         .file(mustExist = true, canBeDir = false)
@@ -112,11 +112,17 @@ class CheckCommand : CliktCommand(name = "check") {
         terminal.println(TextStyles.bold("Checking ${file.name}"))
         result.metadata?.let { terminal.println(TextColors.gray("  ${it.name} ${it.version} (${it.archToken}), APG v${result.detectedVersion}")) }
         result.warnings.forEach { terminal.println(TextColors.yellow("  warning: $it")) }
-        result.errors.forEach { terminal.println(TextColors.red("  error: $it")) }
-        if (result.ok) {
-            terminal.println(TextColors.green("OK — valid package"))
+        // Server-policy errors (integrity/indexing): reported, but they do not
+        // change the libAPG-compatibility verdict below.
+        result.errors.forEach { terminal.println(TextColors.yellow("  policy: $it")) }
+        result.rejectionReasons.forEach { terminal.println(TextColors.red("  error: $it")) }
+        if (result.libapgCompatible) {
+            terminal.println(TextColors.green("OK — acceptable to libAPG"))
+            if (result.errors.isNotEmpty()) {
+                terminal.println(TextColors.yellow("NOTE — ${result.errors.size} server-policy issue(s); publishing with validate=true would reject it"))
+            }
         } else {
-            terminal.println(TextColors.red("INVALID — ${result.errors.size} error(s)"))
+            terminal.println(TextColors.red("INVALID — libAPG would not accept this package (${result.rejectionReasons.size} reason(s))"))
             throw com.github.ajalt.clikt.core.ProgramResult(1)
         }
     }

@@ -1,6 +1,8 @@
 package meigo.tulpar.server.repo
 
 import meigo.tulpar.server.apg.ApgArchive
+import meigo.tulpar.server.apg.ApgValidator
+import meigo.tulpar.server.apg.ApgVersion
 import meigo.tulpar.server.apg.ChecksumAlgo
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -21,6 +23,9 @@ class Repository(val root: File) {
 
     private val log = LoggerFactory.getLogger(Repository::class.java)
     private val snapshot = AtomicReference(Snapshot(emptyList(), Instant.EPOCH))
+
+    /** Structural validator for indexing (no checksum verification: libAPG does none). */
+    private val indexValidator = ApgValidator(verifyChecksums = false)
 
     val poolDir: File get() = root.resolve("pool")
     val repodataFile: File get() = root.resolve("repodata.json")
@@ -70,27 +75,48 @@ class Repository(val root: File) {
                     }
             }
         }
-        val ordered = found.sortedWith(compareBy({ it.name }, { it.version }, { it.arch }))
+        // Latest build first within each name: the Tulpar client resolves to the
+        // first satisfying build (resolve.c takes the first match), so the order
+        // must follow libAPG ver_compare, newest first. Ties break on arch then
+        // channel for a deterministic listing.
+        val ordered = found.sortedWith(
+            Comparator.comparing { e: PackageEntry -> e.name }
+                .thenComparing(Comparator { a, b -> ApgVersion.compare(b.version, a.version) })
+                .thenComparing { e -> e.arch }
+                .thenComparing { e -> e.channel },
+        )
         snapshot.set(Snapshot(ordered, Instant.now()))
         log.info("indexed {} package(s) from {}", ordered.size, pool)
         return ordered.size
     }
 
-    /** Read one `.apg` into a PackageEntry, validating its metadata exists. */
+    /**
+     * Read one `.apg` into a PackageEntry. A package is indexed only when
+     * libAPG would accept it (the core compatibility invariant); tolerated but
+     * libAPG-rejected archives in a pre-existing pool are flagged with a
+     * warning and excluded from the installable index, never silently listed.
+     */
     private fun scanFile(apg: File, channel: String): PackageEntry? {
-        val bytes = apg.readBytes()
         val archive = ApgArchive.read(apg)
         val meta = archive.metadata() ?: run {
-            log.warn("no parseable metadata in {}", apg)
+            log.warn("excluding {}: no parseable metadata.json with name/version strings", apg.path)
+            return null
+        }
+        val compat = indexValidator.validate(archive)
+        if (!compat.libapgCompatible) {
+            log.warn(
+                "excluding {}: libAPG would not accept this package ({})",
+                apg.path, compat.rejectionReasons.joinToString("; "),
+            )
             return null
         }
         val coords = PackageCoordinates.of(meta, channel)
-        val sha256 = ChecksumAlgo.SHA256.hex(bytes)
+        val sha256 = ChecksumAlgo.SHA256.hexFile(apg)
         val sig = File(apg.parentFile, apg.name + ".sig").isFile
         return PackageEntry(
             coordinates = coords,
             metadata = meta,
-            size = bytes.size.toLong(),
+            size = apg.length(),
             sha256 = sha256,
             signed = sig,
             updatedEpochMillis = apg.lastModified(),

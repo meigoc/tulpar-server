@@ -2,6 +2,7 @@ package meigo.tulpar.server.apg
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -68,15 +69,96 @@ class MetadataTest {
     }
 
     @Test
-    fun `tolerates trailing comma and comments`() {
-        val json = """
-            {
-              // a comment
-              "name": "x", "version": "1.0",
-            }
-        """.trimIndent()
-        val m = ApgMetadata.parse(json)
-        assertEquals("x", m?.name)
+    fun `comments are rejected (yyjson strict, as libAPG parses)`() {
+        // libAPG reads metadata.json with yyjson default flags: comments are a
+        // hard parse error there, so they must be one here (oracle corpus 21).
+        assertFailsWith<ApgJson.ParseException> {
+            ApgMetadata.parse("""{/*c*/"name":"x","version":"1.0"}""")
+        }
+    }
+
+    @Test
+    fun `trailing commas are rejected (yyjson strict)`() {
+        assertFailsWith<ApgJson.ParseException> {
+            ApgMetadata.parse("""{"name":"x","version":"1.0",}""")
+        }
+    }
+
+    @Test
+    fun `leading BOM is rejected (yyjson strict)`() {
+        val withBom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) +
+            """{"name":"x","version":"1.0"}""".toByteArray()
+        assertFailsWith<ApgJson.ParseException> { ApgMetadata.parse(withBom) }
+    }
+
+    @Test
+    fun `unpaired surrogate escape is rejected (yyjson strict)`() {
+        assertFailsWith<ApgJson.ParseException> {
+            ApgMetadata.parse("""{"name":"x","version":"1.0","description":"\ud800"}""")
+        }
+    }
+
+    @Test
+    fun `raw control character in string is rejected (yyjson strict)`() {
+        assertFailsWith<ApgJson.ParseException> {
+            ApgMetadata.parse("{\"name\":\"x\",\"version\":\"1.0\",\"description\":\"tab\there\"}")
+        }
+    }
+
+    @Test
+    fun `numeric version is not a string so the package is not indexable`() {
+        // libAPG accepts the file but leaves version NULL (yyjson_is_str guard,
+        // oracle corpus 23); the server cannot index it.
+        val raw = RawMetadata.from(ApgMetadata.parseObject("""{"name":"adv","version":1.0}""".toByteArray())!!)
+        assertEquals("adv", raw.name)
+        assertNull(raw.version)
+        assertNull(ApgMetadata.parse("""{"name":"adv","version":1.0}"""))
+    }
+
+    @Test
+    fun `empty object parses for libAPG but has no indexable fields`() {
+        val raw = RawMetadata.from(ApgMetadata.parseObject("{}".toByteArray())!!)
+        assertNull(raw.name)
+        assertNull(raw.version)
+        assertNull(ApgMetadata.parse("{}"))
+    }
+
+    @Test
+    fun `duplicate keys keep the first value (yyjson_obj_get semantics)`() {
+        val raw = RawMetadata.from(
+            ApgMetadata.parseObject("""{"name":"first","name":"second","version":"1.0"}""".toByteArray())!!,
+        )
+        assertEquals("first", raw.name)
+    }
+
+    @Test
+    fun `non-string array items are dropped (libAPG parse_str_array)`() {
+        val raw = RawMetadata.from(
+            ApgMetadata.parseObject(
+                """{"name":"a","version":"1","tags":["x",5,null,"y"],"dependencies":["ok",7]}""".toByteArray(),
+            )!!,
+        )
+        assertEquals(listOf("x", "y"), raw.tags)
+        assertEquals(listOf("ok"), raw.dependencies)
+    }
+
+    @Test
+    fun `empty strings stay empty strings (not null)`() {
+        val raw = RawMetadata.from(
+            ApgMetadata.parseObject("""{"name":"a","version":"1","description":"","architecture":""}""".toByteArray())!!,
+        )
+        assertEquals("", raw.description)
+        assertEquals("", raw.architecture)
+        // empty architecture still maps to the noarch token
+        assertEquals("noarch", ApgMetadata.parse("""{"name":"a","version":"1","architecture":""}""")!!.archToken)
+    }
+
+    @Test
+    fun `unknown fields are ignored (libAPG reads a fixed field set)`() {
+        val m = ApgMetadata.parse(
+            """{"name":"adv","version":"1.0","future_field":{"x":1},"zeta":"kept"}""",
+        )!!
+        assertEquals("adv", m.name)
     }
 
     @Test
