@@ -272,3 +272,57 @@ class PublishLimitsTest {
         assertEquals(pkg.toList(), stored.readBytes().toList())
     }
 }
+
+class PublishStatusCodesTest {
+
+    private val root: File = WebTestSupport.tempRepo()
+    private val token = "secret-token"
+
+    @AfterTest
+    fun cleanup() = root.deleteRecursively().let {}
+
+    private fun ctx(): ServerContext {
+        val publish = PublishConfig(enabled = true, tokens = listOf(token), validate = true, allowOverwrite = false)
+        val config = TulparConfig(publish = publish).copy(repo = TulparConfig().repo.copy(root = root.path))
+        val repo = Repository(root).apply { reindex() }
+        return ServerContext(config, repo)
+    }
+
+    private fun uploadForm(pkg: ByteArray) = formData {
+        append("apg", pkg, Headers.build {
+            append(HttpHeaders.ContentDisposition, "filename=\"pkg.apg\"")
+        })
+    }
+
+    @Test
+    fun `duplicate publish returns 409 conflict`() = testApplication {
+        application { tulparModule(ctx()) }
+        val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")
+        val first = client.submitFormWithBinaryData("/api/v2/packages", uploadForm(pkg)) {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.Created, first.status)
+        val second = client.submitFormWithBinaryData("/api/v2/packages", uploadForm(pkg)) {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.Conflict, second.status)
+        assertContains(second.bodyAsText(), "conflict")
+    }
+
+    @Test
+    fun `rate limiting responds with the uniform JSON error model`() = testApplication {
+        val limits = meigo.tulpar.server.config.LimitsConfig(
+            maxRequestsPerWindow = 1, banDurationMillis = 60_000, exemptLoopback = false,
+        )
+        val config = TulparConfig(limits = limits).copy(repo = TulparConfig().repo.copy(root = root.path))
+        application {
+            tulparModule(
+                ServerContext(config, Repository(root).apply { reindex() }, meigo.tulpar.server.security.IpGuard(limits)),
+            )
+        }
+        client.get("/api/v2/health")
+        val banned = client.get("/api/v2/health")
+        assertEquals(HttpStatusCode.TooManyRequests, banned.status)
+        assertContains(banned.bodyAsText(), "\"error\":\"rate_limited\"")
+    }
+}

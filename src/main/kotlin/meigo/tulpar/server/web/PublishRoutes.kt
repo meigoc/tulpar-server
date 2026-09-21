@@ -95,10 +95,14 @@ fun Route.publishRoutes(ctx: ServerContext) {
                             PublishResponse("published", result.coordinates.relativePath, result.signed, result.warnings),
                         )
                     }
-                    is PublishResult.Rejected -> call.respond(
-                        HttpStatusCode.UnprocessableEntity,
-                        ErrorResponse("rejected", (listOf(result.reason) + result.errors).joinToString("; ")),
-                    )
+                    is PublishResult.Rejected -> {
+                        val status = if (result.conflict) HttpStatusCode.Conflict else HttpStatusCode.UnprocessableEntity
+                        val code = if (result.conflict) "conflict" else "rejected"
+                        call.respond(
+                            status,
+                            ErrorResponse(code, (listOf(result.reason) + result.errors).joinToString("; ")),
+                        )
+                    }
                 }
             } catch (e: UploadTooLargeException) {
                 call.respond(

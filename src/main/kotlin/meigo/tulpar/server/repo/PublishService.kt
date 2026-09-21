@@ -19,7 +19,15 @@ sealed interface PublishResult {
         val signed: Boolean,
     ) : PublishResult
 
-    data class Rejected(val reason: String, val errors: List<String> = emptyList()) : PublishResult
+    /**
+     * @param conflict maps to HTTP 409 (duplicate/collision); otherwise the
+     *        route answers 422 (semantic rejection) or 400 (structural).
+     */
+    data class Rejected(
+        val reason: String,
+        val errors: List<String> = emptyList(),
+        val conflict: Boolean = false,
+    ) : PublishResult
 }
 
 /** Rejection that must map to HTTP 413 (payload too large) instead of 422. */
@@ -136,7 +144,7 @@ class PublishService(
 
         synchronized(writeLock) {
             if (target.isFile && !config.allowOverwrite) {
-                return PublishResult.Rejected("package already exists: ${coords.relativePath}")
+                return PublishResult.Rejected("package already exists: ${coords.relativePath}", conflict = true)
             }
             // Case-insensitive filesystems (Windows, default macOS) would let
             // "Pkg" overwrite "pkg" via a distinct-looking path; detect the
@@ -150,6 +158,7 @@ class PublishService(
                 if (collides) {
                     return PublishResult.Rejected(
                         "package collides with an existing one on case-insensitive filesystems: ${coords.relativePath}",
+                        conflict = true,
                     )
                 }
             }
