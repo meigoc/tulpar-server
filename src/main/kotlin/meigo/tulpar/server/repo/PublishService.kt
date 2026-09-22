@@ -30,9 +30,6 @@ sealed interface PublishResult {
     ) : PublishResult
 }
 
-/** Rejection that must map to HTTP 413 (payload too large) instead of 422. */
-class UploadTooLargeException(message: String) : Exception(message)
-
 /** Outcome of a delete (yank) attempt. */
 sealed interface DeleteResult {
     data object Deleted : DeleteResult

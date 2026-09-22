@@ -166,6 +166,21 @@ class ConfigValidationEdgeTest {
     }
 
     @Test
+    fun `maxUploadBytes upper bound prevents Long overflow in cap arithmetic`() {
+        val result = ConfigValidation.validate(
+            TulparConfig(
+                publish = PublishConfig(
+                    enabled = true,
+                    tokens = listOf("x".repeat(32)),
+                    maxUploadBytes = Long.MAX_VALUE,
+                ),
+            ),
+        )
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.contains("maxUploadBytes") }, result.errors.toString())
+    }
+
+    @Test
     fun `maxSignatureBytes upper bound prevents Int overflow`() {
         val result = ConfigValidation.validate(
             TulparConfig(

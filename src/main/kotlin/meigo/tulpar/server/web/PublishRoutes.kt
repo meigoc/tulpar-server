@@ -9,7 +9,6 @@ import kotlinx.serialization.Serializable
 import meigo.tulpar.server.ServerContext
 import meigo.tulpar.server.repo.DeleteResult
 import meigo.tulpar.server.repo.PublishResult
-import meigo.tulpar.server.repo.UploadTooLargeException
 import meigo.tulpar.server.security.Identifiers
 import meigo.tulpar.server.security.PathSafety
 import java.io.File
@@ -157,11 +156,6 @@ fun Route.publishRoutes(ctx: ServerContext) {
                     }
                 }
             } catch (e: MultipartLimitException) {
-                call.respond(
-                    HttpStatusCode.PayloadTooLarge,
-                    ErrorResponse("payload_too_large", e.message ?: "upload exceeds the configured limit"),
-                )
-            } catch (e: UploadTooLargeException) {
                 call.respond(
                     HttpStatusCode.PayloadTooLarge,
                     ErrorResponse("payload_too_large", e.message ?: "upload exceeds the configured limit"),

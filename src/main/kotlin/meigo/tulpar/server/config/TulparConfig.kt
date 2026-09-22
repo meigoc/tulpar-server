@@ -163,6 +163,13 @@ object ConfigValidation {
     /** Upper bound for publish.maxSignatureBytes (a valid .sig is 64 bytes). */
     const val MAX_SIGNATURE_BYTES_LIMIT = 1L * 1024 * 1024
 
+    /**
+     * Upper bound for publish.maxUploadBytes. Besides sanity, this keeps the
+     * route's total-cap arithmetic (upload + sig + field + overhead) far from
+     * Long overflow, which would silently 413 every upload.
+     */
+    const val MAX_UPLOAD_BYTES_LIMIT = 1L * 1024 * 1024 * 1024 * 1024 // 1 TiB
+
     /** Keystore passwords that ship with tooling defaults and must be flagged. */
     private val DEFAULT_KEYSTORE_PASSWORDS = setOf("changeit", "changeme", "")
 
@@ -221,6 +228,9 @@ object ConfigValidation {
                 }
             }
             if (maxUploadBytes < 1) errors.add("publish.maxUploadBytes must be >= 1")
+            if (maxUploadBytes > MAX_UPLOAD_BYTES_LIMIT) {
+                errors.add("publish.maxUploadBytes must be <= $MAX_UPLOAD_BYTES_LIMIT (1 TiB)")
+            }
             if (maxSignatureBytes < 64) errors.add("publish.maxSignatureBytes must be >= 64")
             if (maxSignatureBytes > MAX_SIGNATURE_BYTES_LIMIT) {
                 errors.add("publish.maxSignatureBytes must be <= $MAX_SIGNATURE_BYTES_LIMIT")

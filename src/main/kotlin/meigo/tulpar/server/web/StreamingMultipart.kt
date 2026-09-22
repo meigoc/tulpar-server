@@ -33,11 +33,17 @@ class MultipartLimitException(message: String) : Exception(message)
  * protocol violations raise [BadRequestUploadException]; all cap breaches
  * raise [MultipartLimitException].
  *
- * Structure: one rolling window of unconsumed bytes and a five-state machine
- * (PREAMBLE → HEADERS → BODY → BOUNDARY → done). The window holds at most the
- * unflushable tail of a part body (`crlfDelim.size - 1` bytes that could
- * begin a delimiter split across reads) plus buffered headers, so memory
- * stays bounded. Behavior is pinned by StreamingMultipartTest (hand-built
+ * Structure: one rolling window of unconsumed bytes and a four-state machine
+ * (PREAMBLE → HEADERS → BODY → BOUNDARY). The window is bounded: in BODY it
+ * holds at most the unflushable delimiter tail (`crlfDelim.size - 1` bytes)
+ * plus one read buffer; in PREAMBLE/HEADERS it is capped at HEADER_CAP (one
+ * read past the cap may transiently add READ_BUFFER before the check fires).
+ *
+ * Leniency at the closing boundary: a body ending exactly at
+ * `CRLF--boundary` with no final `--` before EOF is accepted as complete, and
+ * bytes after the closing `--` (epilogue) are ignored. Neither can
+ * mis-delimit part content; everything published is additionally gated by the
+ * magic-byte preflight, full libAPG validation, and identifier allowlists. Behavior is pinned by StreamingMultipartTest (hand-built
  * bodies incl. split delimiters, preambles, epilogues, truncation) and by the
  * publish integration tests (real Ktor-client bodies).
  */
