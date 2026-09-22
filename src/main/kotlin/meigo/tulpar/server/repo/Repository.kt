@@ -95,11 +95,10 @@ class Repository(val root: File) {
                     }
             }
         }
-        // Latest build first within each name: the Tulpar client resolves to the
-        // first satisfying build (resolve.c takes the first match), so the order
-        // must follow libAPG ver_compare, newest first. Remaining tie-breakers
-        // (arch, channel, version text) make the listing byte-deterministic even
-        // for ver_compare-equal versions such as "0:9.9" and "9.9".
+        // Latest build first within each name: the Tulpar client resolves to
+        // the first satisfying build, so ordering follows ver_compare. The
+        // remaining tie-breakers keep the listing deterministic even for
+        // ver_compare-equal versions such as "0:9.9" and "9.9".
         val ordered = found.sortedWith(
             Comparator.comparing { e: PackageEntry -> e.name }
                 .thenComparing(Comparator { a, b -> ApgVersion.compare(b.version, a.version) })
@@ -134,9 +133,8 @@ class Repository(val root: File) {
             return null
         }
         val coords = PackageCoordinates.of(meta, channel)
-        // Identifiers become URL and filesystem segments: pool contents placed
-        // out-of-band with hostile names/versions/arches are flagged and
-        // excluded (publish enforces the same allowlist at upload time).
+        // Identifiers become URL and filesystem segments; the same allowlist
+        // as the publish path is enforced here for out-of-band pool contents.
         if (!Identifiers.isSafeChannel(channel) || !Identifiers.isSafeName(coords.name) ||
             !Identifiers.isSafeVersion(coords.version) || !Identifiers.isSafeArch(coords.arch)
         ) {

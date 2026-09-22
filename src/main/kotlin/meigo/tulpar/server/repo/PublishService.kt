@@ -101,11 +101,9 @@ class PublishService(
             return PublishResult.Rejected("package failed validation", validation.errors)
         }
 
-        // Detached-signature policy. A present .sig is always verified against
-        // the libAPG-compatible keyring; an invalid signature is rejected even
-        // when signatures are optional (the server never stores a package whose
-        // attached signature does not verify). A missing .sig is rejected only
-        // when requireSignature is set.
+        // Detached-signature policy: a present .sig must verify against the
+        // keyring even when signatures are optional; a missing .sig is only
+        // rejected under requireSignature.
         if (sigBytes != null) {
             if (sigBytes.size > config.maxSignatureBytes) {
                 return PublishResult.Rejected("signature exceeds ${config.maxSignatureBytes} bytes")
@@ -120,12 +118,9 @@ class PublishService(
 
         val coords = PackageCoordinates.of(meta, ch)
 
-        // Security: the path is derived from attacker-controlled metadata
-        // (name/version/architecture) and the channel. Enforce the strict
-        // identifier allowlists (Identifiers), reject any segment that isn't a
-        // safe path component, and verify the resolved target stays strictly
-        // inside pool/ — otherwise a crafted "name":"../../etc/x" could write
-        // outside the repository.
+        // The pool path is derived from attacker-controlled metadata, so the
+        // identifiers go through the allowlists and the resolved target must
+        // stay strictly inside the repository root.
         if (!Identifiers.isSafeChannel(ch) || !Identifiers.isSafeName(coords.name) ||
             !Identifiers.isSafeVersion(coords.version) || !Identifiers.isSafeArch(coords.arch)
         ) {
@@ -143,9 +138,8 @@ class PublishService(
             if (target.isFile && !config.allowOverwrite) {
                 return PublishResult.Rejected("package already exists: ${coords.relativePath}", conflict = true)
             }
-            // Case-insensitive filesystems (Windows, default macOS) would let
-            // "Pkg" overwrite "pkg" via a distinct-looking path; detect the
-            // collision through the existing index instead.
+            // On case-insensitive filesystems "Pkg" would silently overwrite
+            // "pkg"; detect the collision through the index.
             if (!config.allowOverwrite) {
                 val canonicalTarget = Identifiers.canonical(coords.relativePath)
                 val collides = repository.entries().any {
@@ -160,8 +154,7 @@ class PublishService(
                 }
             }
             target.parentFile.mkdirs()
-            // Atomic move from the staging temp file (same filesystem by
-            // construction): readers never observe a partial package.
+            // Atomic same-filesystem move: readers never see a partial package.
             try {
                 Files.move(
                     apgFile.toPath(), target.toPath(),

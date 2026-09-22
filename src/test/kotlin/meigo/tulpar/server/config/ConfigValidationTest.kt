@@ -94,8 +94,7 @@ class ConfigValidationTest {
     }
 
     @Test
-    fun `production deployment config validates cleanly`() {
-        // The live network1 configuration must keep starting under 2.0.0.
+    fun `a deployment config with env-substituted token validates cleanly`() {
         val token = "x".repeat(51)
         val config = TulparConfig(
             server = ServerConfig(

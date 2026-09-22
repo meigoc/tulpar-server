@@ -73,8 +73,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
 
     // Archive: read .apg natively. libAPG accepts tar under {none, gzip, xz,
-    // zstd} (src/archive.c); zstd-jni backs the zstd filter, matching the
-    // version bundled by the production 2.0-PREVIEW-1 deployment.
+    // zstd} (src/archive.c); zstd-jni backs the zstd filter.
     implementation("org.apache.commons:commons-compress:$commonsCompressVersion")
     implementation("org.tukaani:xz:$xzVersion")
     implementation("com.github.luben:zstd-jni:$zstdJniVersion")

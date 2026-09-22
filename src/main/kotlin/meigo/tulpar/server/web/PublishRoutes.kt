@@ -49,10 +49,9 @@ fun Route.publishRoutes(ctx: ServerContext) {
             val maxUpload = ctx.config.publish.maxUploadBytes
             val maxSig = ctx.config.publish.maxSignatureBytes
 
-            // Publish requires a declared Content-Length: with a chunked body,
-            // an attacker controls how long the parser keeps reading. Every
-            // legitimate publisher (curl -F, the pkgdrop autopublish script)
-            // declares the length.
+            // Publish requires a declared Content-Length: with a chunked body
+            // the parser cannot bound how long it keeps reading. A normal
+            // multipart form post always declares the length.
             val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
             if (declared == null) {
                 call.respond(
@@ -79,10 +78,9 @@ fun Route.publishRoutes(ctx: ServerContext) {
                 return@post
             }
 
-            // Ownership: `staged` is the route-owned staging temp file. It is
-            // nulled only after a successful publish (the file was atomically
-            // moved into the pool); the finally-block deletes it on every other
-            // path (rejections, parse errors, aborted streams).
+            // Ownership: `staged` is the staging temp file, deleted by the
+            // finally-block on every path except a successful publish (the
+            // file is atomically moved into the pool, `staged` nulled).
             var staged: File? = null
             var sigBytes: ByteArray? = null
             var channel: String? = null
@@ -123,10 +121,8 @@ fun Route.publishRoutes(ctx: ServerContext) {
                         ErrorResponse("missing_file", "multipart field 'apg' (the .apg file) is required"),
                     )
 
-                // Magic-byte preflight on the fully staged part: a truncated or
-                // non-archive upload is rejected before the (heavier) archive
-                // parse. Runs after consume() returns so it cannot mask a
-                // parser limit/malformed error.
+                // Magic-byte preflight on the staged part: reject truncated or
+                // non-archive payloads before the heavier archive parse.
                 if (!hasArchiveMagic(apgFile)) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,

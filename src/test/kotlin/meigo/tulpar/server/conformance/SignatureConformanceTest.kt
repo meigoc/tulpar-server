@@ -85,8 +85,8 @@ class SignatureConformanceTest {
 
     @Test
     fun `genuine libAPG signatures are Ed25519ph and plain Ed25519 rejects them`() {
-        // Regression guard for the D-015 discovery: a plain-Ed25519 verifier
-        // (no prehash parameter) must NOT accept the libAPG-signed payload.
+        // A plain-Ed25519 verifier (no prehash parameter) must NOT accept the
+        // libAPG-signed payload: the signature scheme is Ed25519ph.
         val base = sigDir()
         val keyring = ApgSignature.loadKeyring(File(base, "keyring-a"))
         val sigBytes = File(base, "payload.sig").readBytes()

@@ -14,14 +14,8 @@ class BadRequestUploadException(message: String) : Exception(message)
 class MultipartLimitException(message: String) : Exception(message)
 
 /**
- * Minimal streaming multipart/form-data reader (RFC 2046 / RFC 7578) for the
- * publish endpoint.
- *
- * Why not Ktor's `receiveMultipart`: it enforces ONE per-part limit
- * (`formFieldLimit`) on every part — a file part larger than the limit fails
- * the boundary scan before the route sees it, while a small limit that
- * protects form fields rejects every real package (both verified empirically
- * against Ktor 3.3.3). This reader decouples the two:
+ * Streaming multipart/form-data reader (RFC 2046 / RFC 7578) for the publish
+ * endpoint, with separate size caps per part kind:
  *  - file parts stream into a per-part sink bounded by [maxFileBytes]
  *    (heap use is O(read buffer), not O(part));
  *  - non-file parts accumulate in memory bounded by [maxFieldBytes];
@@ -29,23 +23,20 @@ class MultipartLimitException(message: String) : Exception(message)
  *
  * Supported surface is exactly what publish accepts: file parts with a
  * Content-Disposition name and optional filename, plus small text fields.
- * Parts with Content-Transfer-Encoding are rejected rather than guessed. All
+ * Parts with Content-Transfer-Encoding are rejected rather than decoded. All
  * protocol violations raise [BadRequestUploadException]; all cap breaches
  * raise [MultipartLimitException].
  *
  * Structure: one rolling window of unconsumed bytes and a four-state machine
  * (PREAMBLE → HEADERS → BODY → BOUNDARY). The window is bounded: in BODY it
  * holds at most the unflushable delimiter tail (`crlfDelim.size - 1` bytes)
- * plus one read buffer; in PREAMBLE/HEADERS it is capped at HEADER_CAP (one
- * read past the cap may transiently add READ_BUFFER before the check fires).
+ * plus one read buffer; in PREAMBLE/HEADERS it is capped at HEADER_CAP.
  *
- * Leniency at the closing boundary: a body ending exactly at
- * `CRLF--boundary` with no final `--` before EOF is accepted as complete, and
- * bytes after the closing `--` (epilogue) are ignored. Neither can
- * mis-delimit part content; everything published is additionally gated by the
- * magic-byte preflight, full libAPG validation, and identifier allowlists. Behavior is pinned by StreamingMultipartTest (hand-built
- * bodies incl. split delimiters, preambles, epilogues, truncation) and by the
- * publish integration tests (real Ktor-client bodies).
+ * A body ending exactly at `CRLF--boundary` with no final `--` before EOF is
+ * accepted as complete, and bytes after the closing `--` (epilogue) are
+ * ignored. Neither affects part delimiting; published payloads are further
+ * gated by the magic-byte preflight, full validation, and identifier
+ * allowlists.
  */
 class StreamingMultipart(
     private val channel: ByteReadChannel,

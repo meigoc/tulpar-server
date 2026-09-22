@@ -97,9 +97,8 @@ src/json.c:149,195,210); fields copied only when the JSON value is a string
 ## 4. Checksum files (`md5sums`, `crc32sums`, `sha256sums`)
 
 libAPG **never reads** checksum files (no reference anywhere in src/ or
-include/; grep-verified at the pinned commit). `apgv2.md` documents `md5sums`
-as part of the package layout; production pool packages (network1, 95 pkgs)
-carry **no** sums files at all.
+include/). `apgv2.md` documents `md5sums` as part of the package layout, but
+real-world pool packages commonly carry **no** sums files at all.
 
 | Behavior | libAPG | Server | Test | Status |
 |---|---|---|---|---|
@@ -130,9 +129,7 @@ under the `dom2(1,"")` separator) over the exact bytes of the package file
 streaming API `crypto_sign_init/update/final_verify`, which libsodium aliases
 to `crypto_sign_ed25519ph_*` (libsodium crypto_sign.h:23, sign_ed25519.c:61-97,
 ref10/sign.c DOM2PREFIX). **A plain-Ed25519 verifier rejects every genuine
-libAPG signature** — discovered differentially and recorded as
-`.agent`-side decision D-015; upstream issue drafted (libAPG docs say only
-"Ed25519").
+libAPG signature**, while libAPG documentation says only "Ed25519".
 Keyring: directory (default `/etc/apg/trusted.d`, meson option `keyring_dir`),
 every file ending in `.key`, **first 32 bytes** read as the public key; files
 shorter than 32 bytes are skipped; longer files are silently truncated

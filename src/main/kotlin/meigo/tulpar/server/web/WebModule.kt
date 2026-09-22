@@ -46,10 +46,8 @@ fun Application.tulparModule(ctx: ServerContext) {
     install(io.ktor.server.plugins.conditionalheaders.ConditionalHeaders)
 
     install(StatusPages) {
-        // Ktor's multipart parser enforced formFieldLimit in a background job;
-        // with the in-repo StreamingMultipart the caps raise MultipartLimit-
-        // Exception directly. The IOException mapping is kept for any residual
-        // engine-level limit paths and mapped to the same 413.
+        // Multipart size caps normally surface as MultipartLimitException;
+        // this mapping covers engine-level limit failures with the same 413.
         exception<java.io.IOException> { call, cause ->
             if (cause.message?.contains("exceeds limit") == true) {
                 call.respond(

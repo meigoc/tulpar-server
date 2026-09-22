@@ -22,9 +22,7 @@ import java.security.spec.NamedParameterSpec
  * SHA-512(package) under the `dom2(1,"")` separator. A plain-Ed25519 verifier
  * therefore rejects every genuine libAPG signature. The JDK reaches the same
  * result with `Signature("Ed25519")` + `EdDSAParameterSpec(prehash = true)`,
- * which hashes the message internally — verified differentially against a C
- * signer that uses libAPG's exact call sequence (conformance/oracle/
- * apg_sigtool.c) and against the oracle's `keyring_verify`.
+ * which hashes the message internally.
  *
  * Other libAPG facts reproduced here:
  *  - a `.sig` file is RAW 64 bytes (no armor, no key ID, no metadata);
