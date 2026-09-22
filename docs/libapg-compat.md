@@ -188,7 +188,7 @@ the string wins** (strstr), name/version trimmed of space/tab only.
 | `2` vs `2.0` | equal | equal | goldens-vercmp | identical |
 | dep operator table order | `>=,<=,==,!=,>,<` first match | same | goldens-depparse (25), incl. `weird<1.0>2.0` → GT | identical |
 | canonical form | `name op version`, single spaces | same | goldens-depparse | identical |
-| "latest" resolution | client takes first satisfying build | server sorts builds latest-first with ver_compare | `RepositoryTest` (ordering tests); full client contract test lands in Phase 4 | identical (contract) |
+| "latest" resolution | client takes first satisfying build | server sorts builds latest-first with ver_compare | `RepositoryTest` (ordering), `TulparContractTest` (first-build resolution) | identical (contract) |
 
 ## 8. Error classification
 

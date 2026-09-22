@@ -42,3 +42,6 @@ Thumbs.db
 
 # CI scratch (libAPG build cache workspace)
 .agent-cache/
+
+# Internal release-engineering scratch (packets, reviews, deps, fixtures)
+/.agent/

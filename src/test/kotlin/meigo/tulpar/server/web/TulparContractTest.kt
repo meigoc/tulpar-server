@@ -69,8 +69,10 @@ class TulparContractTest {
                     assertTrue(o.containsKey(field), "$path: item missing '$field': $o")
                 }
                 for (field in listOf("provides", "replaces")) {
-                    assertTrue(o[field]!!.jsonArray.isNotEmpty() || o[field]!!.jsonArray.isEmpty(),
-                        "$path: '$field' must be an array")
+                    assertTrue(
+                        o[field] is kotlinx.serialization.json.JsonArray,
+                        "$path: '$field' must be an array: $o",
+                    )
                 }
             }
         }

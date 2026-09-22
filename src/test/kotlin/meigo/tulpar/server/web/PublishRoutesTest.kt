@@ -381,6 +381,23 @@ class PublishMultipartAbuseTest {
     }
 
     @Test
+    fun `chunked upload without Content-Length is rejected with 411`() = testApplication {
+        application { tulparModule(ctx()) }
+        // A ReadChannelContent body without contentLength() is sent with
+        // chunked transfer encoding (no Content-Length header).
+        val chunked = object : io.ktor.http.content.OutgoingContent.ReadChannelContent() {
+            override val contentType = ContentType.MultiPart.FormData.withParameter("boundary", "xyz")
+            override fun readFrom(): io.ktor.utils.io.ByteReadChannel =
+                io.ktor.utils.io.ByteReadChannel("--xyz--\r\n")
+        }
+        val resp = client.post("/api/v2/packages") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            setBody(chunked)
+        }
+        assertEquals(HttpStatusCode.LengthRequired, resp.status)
+    }
+
+    @Test
     fun `two package parts in one upload is a 400`() = testApplication {
         application { tulparModule(ctx()) }
         val pkg = ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64")

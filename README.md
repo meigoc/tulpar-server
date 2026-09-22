@@ -41,7 +41,10 @@ keyring format) stay valid.
 
 ## 🔧 Build info
 
-**Requirements:** JDK 21+
+**Requirements:** JDK 21+ (the Gradle build pins a Java 21 toolchain for
+compilation and tests via the foojay resolver; running Gradle itself on a
+newer JDK, e.g. 25, is supported and exercised in CI, but the tests then
+still execute on the pinned 21 toolchain JVM).
 
 ```bash
 ./gradlew shadowJar   # fat-jar with all dependencies (recommended)
@@ -132,7 +135,7 @@ When started in the foreground, an interactive console is available:
 | POST | `/api/v2/packages` | Publish (multipart, Bearer auth) |
 | DELETE | `/api/v2/packages/{channel}/{name}/{version}/{arch}` | Yank (Bearer auth) |
 
-All error responses use one JSON shape:
+All API error responses use one JSON shape:
 
 ```json
 { "error": "not_found", "detail": "package not found" }
@@ -140,14 +143,21 @@ All error responses use one JSON shape:
 
 | Status | Meaning |
 |--------|---------|
-| 400 | structural problem (bad identifier, payload not an archive, bad JSON) |
+| 400 | structural problem (bad identifier, payload not an archive, bad JSON, chunked/multipart body) |
 | 401 | missing or invalid bearer token |
 | 403 | publishing disabled |
 | 404 | unknown package / missing file or signature |
 | 409 | package already exists (publish without `allowOverwrite`) |
+| 411 | publish without a `Content-Length` header (chunked upload) |
 | 413 | upload exceeds `publish.maxUploadBytes` |
 | 422 | semantic rejection (libAPG-incompatible package, failed validation, bad signature) |
 | 429 | rate limit / download concurrency limit / active ban |
+| 500 | internal error (`detail` is always null; the cause is logged server-side only) |
+| 503 | `/api/v2/health` before the first index completes (`ready:false`) |
+
+The `errors/404.html` file, if present in the working directory, is served
+instead of JSON for unmatched routes; the favicon 404 has an empty body. All
+other API errors use the JSON shape above.
 
 `q` matches case-insensitively against name, description and tags (substring).
 
@@ -263,6 +273,16 @@ passwords (`changeit`) produce a loud warning.
 `packages`, `totalRequests` (JSON object; names are stable).
 
 ## Deployment
+
+### Readiness and startup
+
+With `repo.reindexOnStart = true` (default) the server binds its port only
+**after** the first index completes — during warmup clients see
+connection-refused, not the 503 `starting` state. The 503/`ready:false`
+response is observable when the module is embedded programmatically (and is
+covered by tests). With `reindexOnStart = false` the server binds immediately
+with an intentionally empty index and reports `ready:true`; use that mode only
+behind a proxy that tolerates an empty repository.
 
 ### Reverse proxy
 

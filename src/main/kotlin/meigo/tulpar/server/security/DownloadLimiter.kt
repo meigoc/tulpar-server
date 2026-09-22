@@ -6,14 +6,18 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Per-IP download concurrency and throughput limiting.
+ * Per-IP download concurrency limiting, plus a per-stream throughput cap.
  *
  * Ports the legacy PackageDownloadManager:
  *   - at most [LimitsConfig.maxDownloadsPerIP] concurrent downloads per IP
- *     (callers emit HTTP 429 when [tryAcquire] returns false),
- *   - throughput capped at [LimitsConfig.maxDownloadSpeed] bytes/sec per IP
- *     via a simple token bucket ([throttleDelayMillis] tells the streamer how
- *     long to sleep before sending the next chunk; 0 = no limit).
+ *     (callers emit HTTP 429 when [tryAcquire] returns false);
+ *   - throughput capped at [LimitsConfig.maxDownloadSpeed] bytes/sec **per
+ *     concurrent download stream** of an IP — [bucketFor] hands out a fresh
+ *     token-bucket [Bucket] per stream, so an IP running at its concurrency
+ *     cap can pull up to `cap x maxDownloadSpeed` in aggregate. The cap
+ *     applies to full-body GETs only; Range/resume requests are served
+ *     unthrottled. `maxDownloadSpeed = 0` means unlimited. Both behaviors are
+ *     documented in the README.
  */
 class DownloadLimiter(
     private val limits: LimitsConfig,

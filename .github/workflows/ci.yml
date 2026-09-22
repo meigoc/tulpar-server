@@ -43,10 +43,12 @@ jobs:
           restore-keys: gradle-${{ runner.os }}-jdk${{ matrix.jdk }}-
 
       - name: Build and test
+        shell: bash   # windows-latest defaults to pwsh, which cannot run ./gradlew
         run: ./gradlew build test --no-daemon --console=plain --stacktrace
 
       - name: Fat jar
         if: matrix.os == 'ubuntu-latest' && matrix.jdk == 21
+        shell: bash
         run: ./gradlew shadowJar --no-daemon --console=plain
 
       - name: Upload fat jar

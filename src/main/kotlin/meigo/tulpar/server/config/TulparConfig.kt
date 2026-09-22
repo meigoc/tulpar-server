@@ -106,9 +106,10 @@ object ConfigFactory {
 
     /**
      * Keys present in [configFile] that the schema does not define — almost
-     * always typos that would otherwise be silently ignored. Detected by
-     * flattening the HOCON tree and diffing against [KNOWN_KEYS]; the bundled
-     * defaults are subtracted so only file-introduced unknowns are reported.
+     * always typos that would otherwise be silently ignored. Only the
+     * user-supplied file is parsed (bundled defaults never enter the tree, so
+     * they are never reported); detected by flattening the HOCON tree and
+     * diffing against [KNOWN_KEYS].
      */
     fun unknownKeys(configFile: File): List<String> {
         if (!configFile.exists()) return emptyList()
