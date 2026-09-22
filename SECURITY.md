@@ -25,9 +25,9 @@ Use one of the following channels:
   "Report a vulnerability" button on the
   [Security tab](../../security/advisories/new) of this repository. Reports
   remain private until resolved.
-- **Direct contact** — reach out privately to the maintainers listed on
-  [nuros.org](https://nuros.org). We recommend contacting multiple maintainers
-  who are familiar with Tulpar Server or the NurOS project.
+- **Community chat** — reach the developers in the NurOS community chat at
+  [t.me/nuros_tg](https://t.me/nuros_tg). For a sensitive report, ask there
+  for a private channel to a maintainer rather than posting details publicly.
 
 Include in your report:
 
