@@ -139,7 +139,7 @@ class PublishRoutesTest {
             // .sig is served back verbatim
             val served = client.get("/api/v2/download/main/curl/7.85.0/x86_64.sig")
             assertEquals(HttpStatusCode.OK, served.status)
-            assertEquals(sig.toList(), served.readBytes().toList())
+            assertEquals(sig.toList(), served.readRawBytes().toList())
         } finally {
             keyring.deleteRecursively()
         }

@@ -294,15 +294,31 @@ class PublishServiceTest {
     @Test
     fun `rejects a case-insensitive collision with an existing package`() {
         val svc = service(allowOverwrite = false)
-        // Publish "curl" first, then "CURL" — same file on a case-insensitive FS.
+        // Publish "curl" first, then "CURL". On a case-sensitive filesystem
+        // these are distinct pool paths and the index-level collision check
+        // fires; on a case-insensitive one (Windows, default macOS) they are
+        // the SAME file and the existence check fires first. Both are a
+        // conflict rejection — the invariant is that "CURL" is never stored
+        // alongside or over "curl".
         assertIs<PublishResult.Success>(svc.publish(ApgTestFixtures.validV2Package("curl", "7.85.0", "x86_64"), null))
         val collision = svc.publish(ApgTestFixtures.validV2Package("CURL", "7.85.0", "x86_64"), null)
         val rejected = assertIs<PublishResult.Rejected>(collision)
-        assertTrue(rejected.reason.contains("case-insensitive"), rejected.reason)
+        assertTrue(rejected.conflict, "expected a conflict rejection, got: ${rejected.reason}")
+        assertTrue(
+            rejected.reason.contains("case-insensitive") || rejected.reason.contains("already exists"),
+            rejected.reason,
+        )
     }
 
     @Test
     fun `accepts an epoch version identifier`() {
+        // NTFS forbids ':' in file names, so epoch versions cannot be stored
+        // on Windows; the identifier rule itself is platform-independent and
+        // covered by IdentifiersTest — skip the on-disk half there.
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+            System.getProperty("os.name").lowercase().contains("windows"),
+            "epoch ':' is not a legal NTFS filename character",
+        )
         val svc = service()
         val bytes = ApgTestFixtures.validV2Package("pkg", "1:2.3", "x86_64")
         val success = assertIs<PublishResult.Success>(svc.publish(bytes, null))

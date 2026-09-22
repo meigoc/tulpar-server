@@ -1,0 +1,8 @@
+# Conformance fixtures are byte-exact test vectors (signatures, keys, corpus
+# archives, payloads). Any EOL conversion (notably CRLF checkout on Windows)
+# corrupts them and breaks the differential tests.
+src/test/resources/conformance/** -text
+
+gradlew text eol=lf
+*.bat text eol=crlf
+*.sh text eol=lf

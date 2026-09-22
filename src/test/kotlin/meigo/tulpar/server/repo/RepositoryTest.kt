@@ -78,6 +78,10 @@ class RepositoryTest {
 
     @Test
     fun `epoch versions order above plain versions`() {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+            System.getProperty("os.name").lowercase().contains("windows"),
+            "epoch ':' is not a legal NTFS filename character",
+        )
         place("pkg", "1:1.0", "x86_64")
         place("pkg", "0:9.9", "x86_64")
         place("pkg", "9.9", "x86_64")

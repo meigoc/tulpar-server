@@ -64,7 +64,7 @@ class PublishService(
         if (apgBytes.size > config.maxUploadBytes) {
             return PublishResult.Rejected("upload exceeds ${config.maxUploadBytes} bytes")
         }
-        val staged = createTempFile("tulpar-upload-", ".apg", stagingDir())
+        val staged = java.io.File.createTempFile("tulpar-upload-", ".apg", stagingDir())
         return try {
             staged.writeBytes(apgBytes)
             publishStaged(staged, sigBytes, channel)

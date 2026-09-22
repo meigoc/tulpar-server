@@ -83,8 +83,14 @@ class PathSafetyTest {
                 val resolved = PathSafety.resolveContained(link, "pool/x.apg")
                 assertTrue(resolved != null)
                 assertTrue(resolved.path.startsWith(base.canonicalFile.path))
-            } catch (e: UnsupportedOperationException) {
-                // platform without symlink support: nothing to assert
+            } catch (e: Exception) {
+                when (e) {
+                    // Platforms/configurations without symlink support
+                    // (Windows without developer mode, read-only FS): nothing
+                    // to assert.
+                    is UnsupportedOperationException, is java.io.IOException -> Unit
+                    else -> throw e
+                }
             } finally {
                 link.delete()
             }
