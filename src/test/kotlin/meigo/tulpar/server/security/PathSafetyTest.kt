@@ -82,7 +82,20 @@ class PathSafetyTest {
                 java.nio.file.Files.createSymbolicLink(link.toPath(), base.toPath())
                 val resolved = PathSafety.resolveContained(link, "pool/x.apg")
                 assertTrue(resolved != null)
-                assertTrue(resolved.path.startsWith(base.canonicalFile.path))
+                // Compare canonicalized paths against the expected canonical
+                // target rather than string-prefixing: on Windows the symlink
+                // may record an 8.3 short temp path (C:\Users\RUNNER~1\...)
+                // and drive-letter case differs between representations, while
+                // canonicalFile normalization is not string-identical across
+                // those forms.
+                val expected = File(base.canonicalFile, "pool/x.apg").canonicalFile
+                val windows = System.getProperty("os.name").lowercase().contains("windows")
+                val same = if (windows) {
+                    resolved!!.canonicalFile.path.equals(expected.path, ignoreCase = true)
+                } else {
+                    resolved!!.canonicalFile.path == expected.path
+                }
+                assertTrue(same, "resolved ${resolved.canonicalFile.path} != expected ${expected.path}")
             } catch (e: Exception) {
                 when (e) {
                     // Platforms/configurations without symlink support
